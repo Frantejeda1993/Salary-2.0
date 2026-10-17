@@ -129,6 +129,25 @@ dímelo: significa que el valor es anterior a tus datos y lo resolvemos con el i
 
 ---
 
+## Windows (PowerShell): comandos en una sola línea
+
+En PowerShell **no** copies los bloques de abajo que terminan en `\`: esa barra solo
+sirve en macOS/Linux. Usa estos, desde `C:\dev\Salary-2.0\tools\migrate` con `(.venv)` activo:
+
+```powershell
+# Inventario
+python -m salary_migrate inventory --source-key ~/.salary-keys/old-readonly.json --min-month 2026-02
+
+# Ensayo de migración (no escribe en el destino)
+python -m salary_migrate migrate --source-key ~/.salary-keys/old-readonly.json --target-key ~/.salary-keys/salary2-admin.json --uid prueba-migracion --min-month 2026-02 --engine-path C:\dev\salary-legacy --dry-run
+
+# Migración al uid de prueba
+python -m salary_migrate migrate --source-key ~/.salary-keys/old-readonly.json --target-key ~/.salary-keys/salary2-admin.json --uid prueba-migracion --min-month 2026-02 --engine-path C:\dev\salary-legacy
+
+# Borrar la copia de prueba
+python -m salary_migrate wipe --target-key ~/.salary-keys/salary2-admin.json --uid prueba-migracion --confirm prueba-migracion
+```
+
 ## 2. Inventario (solo lectura)
 
 ```bash
