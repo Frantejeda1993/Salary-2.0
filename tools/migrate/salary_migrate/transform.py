@@ -345,11 +345,14 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
         start = ctx.required_date("fixed_expenses", fe, "fecha_inicio")
         end = ctx.optional_date("fixed_expenses", fe, "fecha_fin")
         payments = {mes: p for (fid, mes), p in sorted(instances.items()) if fid == fe["id"]}
-        for mes in payments:
+        for mes, p in payments.items():
             if start and (mes < start[:7] or (end and mes > end[:7])):
-                plan.warn("payment_outside_period", f"fixed_expenses/{fe['id']}: pago en {mes} fuera de su "
-                          f"periodo {start[:7]}–{end[:7] if end else '…'} (bug B6). Se migra tal cual.",
-                          collection="fixed_expenses", id=fe["id"], month=mes)
+                paid = p["status"] == "paid"
+                plan.warn("payment_outside_period" if paid else "unpaid_mark_outside_period",
+                          f"fixed_expenses/{fe['id']}: marca de {'PAGADO' if paid else 'impagado'} en {mes}, fuera de su "
+                          f"periodo {start[:7]}–{end[:7] if end else '…'}. "
+                          + ("Resta en el saldo real de la app vieja (bug B6). " if paid else "No afecta a ningún cálculo. ")
+                          + "Se migra tal cual.", collection="fixed_expenses", id=fe["id"], month=mes)
         revisions = []
         revs_ok = [r for r in (fe.get("revisiones") or []) if r.get("desde")]
         if len(revs_ok) != len(fe.get("revisiones") or []):
