@@ -1,11 +1,19 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./auth";
+import { useData } from "./data";
+import QuickAdd from "./components/QuickAdd";
 import TabBar from "./components/TabBar";
+import { parseAmount } from "./lib/money";
+import { matchByName, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
-import Home from "./pages/Home";
 import Login from "./pages/Login";
+import MonthPage from "./pages/Month";
+import Movements from "./pages/Movements";
 import Onboarding from "./pages/Onboarding";
+import Plan from "./pages/Plan";
 import Settings from "./pages/Settings";
+import { UIProvider, useUI } from "./ui";
 
 export default function App() {
   const { status } = useAuth();
@@ -13,16 +21,62 @@ export default function App() {
   if (status === "signedOut") return <Login />;
   if (status === "denied") return <Denied />;
   if (status === "needsOnboarding") return <Onboarding />;
+  return <UIProvider><Shell /></UIProvider>;
+}
+
+function Shell() {
+  const { quickAdd, openQuickAdd } = useUI();
+  const proxy = useRef<HTMLInputElement>(null);
   return (
     <div className="app">
       <main className="content">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<MonthPage />} />
+          <Route path="/movimientos" element={<Movements />} />
+          <Route path="/plan" element={<Plan />} />
           <Route path="/ajustes" element={<Settings />} />
+          <Route path="/nuevo" element={<FromShortcut />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <TabBar />
+      {/* iOS solo abre el teclado si el foco llega dentro del toque: se enfoca este campo
+          invisible al pulsar «+» y la hoja le pasa el foco al importe. */}
+      <input ref={proxy} className="focus-proxy" inputMode="decimal" tabIndex={-1} aria-hidden="true" />
+      <TabBar onAdd={() => { proxy.current?.focus(); openQuickAdd(); }} />
+      {quickAdd && <QuickAdd prefill={quickAdd} />}
     </div>
   );
+}
+
+/**
+ * Entrada de los atajos: #/nuevo?importe=12,50&comercio=Mercadona&tarjeta=Visa&fecha=2026-10-17
+ * (también cuenta=…). Abre el alta rápida rellena; no guarda nada hasta que confirmas.
+ */
+function FromShortcut() {
+  const { ready, docs } = useData();
+  const { openQuickAdd } = useUI();
+  const loc = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!ready) return;
+    const p = new URLSearchParams(loc.search);
+    const notes: string[] = [];
+    const rawAmount = p.get("importe") ?? "";
+    if (rawAmount && parseAmount(rawAmount) === null) notes.push(`El atajo envió un importe que no entiendo: «${rawAmount}».`);
+    let payWith: string | undefined;
+    const cardName = p.get("tarjeta");
+    const accName = p.get("cuenta");
+    if (cardName) {
+      const id = matchByName(docs.cards as RawCol, cardName);
+      if (id) payWith = `card:${id}`; else notes.push(`No encuentro la tarjeta «${cardName}». Elige con qué pagaste.`);
+    } else if (accName) {
+      const id = matchByName(docs.accounts as RawCol, accName);
+      if (id) payWith = `acc:${id}`; else notes.push(`No encuentro la cuenta «${accName}». Elige con qué pagaste.`);
+    }
+    const date = parseShortcutDate(p.get("fecha")) ?? undefined;
+    if (p.get("fecha") && !date) notes.push(`La fecha «${p.get("fecha")}» no es válida; pongo hoy.`);
+    openQuickAdd({ amount: rawAmount, description: p.get("comercio") ?? "", payWith, date, source: "shortcut", notes });
+    navigate("/", { replace: true });
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <div className="splash">Abriendo…</div>;
 }

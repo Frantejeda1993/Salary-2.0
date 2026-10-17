@@ -1,6 +1,6 @@
 /** Formato y lectura de importes. El motor trabaja en céntimos enteros; Firestore guarda euros. */
 
-const fmt = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
+const fmt = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", useGrouping: "always" });
 
 export const formatCents = (cents: number) => fmt.format(cents / 100);
 export const formatEuros = (euros: number) => fmt.format(euros);
