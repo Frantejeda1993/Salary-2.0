@@ -1,0 +1,18 @@
+{
+  "name": "@salary/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Motor de cálculo de Salary 2.0: TypeScript puro, sin UI ni Firebase.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:real": "vitest run test/real.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.0"
+  }
+}

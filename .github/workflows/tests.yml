@@ -1,0 +1,51 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: Motor TypeScript
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: engine/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  migrate:
+    name: Migración y referencias (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/migrate
+    steps:
+      - uses: actions/checkout@v4
+      # Motor de la app vieja, solo para leerlo. Si el repo no es accesible, los tests
+      # que lo necesitan se omiten (no fallan).
+      - uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: Frantejeda1993/Salary
+          ref: b93f3527229caf8a5fab241ea3c90b71b3f0c274
+          path: salary-legacy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+        env:
+          SALARY_LEGACY_PATH: ${{ github.workspace }}/salary-legacy
