@@ -8,10 +8,12 @@
   "scripts": {
     "test": "vitest run",
     "test:real": "vitest run test/real.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "delta": "tsx scripts/delta.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
     "vitest": "^5.0.5"
   }

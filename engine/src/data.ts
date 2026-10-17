@@ -21,7 +21,11 @@ export interface EFixed {
   isOwn: boolean; revisions: { from: Month; amount?: number; accountId?: string }[];
 }
 export interface EInstance { id: string; fixedId: string; month: Month; status: "pagado" | "impagado"; amount: number | null }
-export interface EBudget { id: string; categoryId: string | null; accountId: string | null; amount: number; start: IsoDate; end: IsoDate | null }
+export interface EBudget {
+  id: string; categoryId: string | null; accountId: string | null; amount: number; start: IsoDate; end: IsoDate | null;
+  /** B3: nuevo importe a partir de un mes (como los gastos fijos). */
+  revisions?: { from: Month; amount: number }[];
+}
 export interface EExpense {
   id: string; date: IsoDate; amount: number; categoryId: string; accountId: string | null;
   credit: boolean; chargeMonth: Month | null; reserveIn: "compra" | "cargo";
@@ -30,6 +34,8 @@ export interface EIncome { id: string; date: IsoDate; amount: number; categoryId
 export interface ETransfer {
   id: string; date: IsoDate; amount: number; from: string | null; to: string | null; description: string;
   isLoan: boolean; status: "pending" | "paid"; outstanding: number | null;
+  /** Reembolso de gasto propio: transferKind 'ownExpenseRefund' (o la descripción automática de la app vieja). */
+  isOwnRefund?: boolean;
 }
 export interface ESettlement { id: string; accountId: string; chargeMonth: Month; date: IsoDate; amount: number }
 
@@ -50,7 +56,37 @@ const byId = <T extends { id: string }>(a: T, b: T) => cmp(a.id, b.id);
 const entries = <T>(rec: Record<string, T> | undefined): [string, T][] =>
   Object.entries(rec ?? {}).sort((a, b) => cmp(a[0], b[0]));
 
-export function fromDataset(ds: Dataset): EngineData {
+export interface DataOptions {
+  /** Importes en céntimos enteros (Fase 4b). Las tasas (deducciones) no cambian. */
+  cents?: boolean;
+}
+
+export function fromDataset(ds: Dataset, opts: DataOptions = {}): EngineData {
+  const out0 = fromDatasetEuros(ds);
+  return opts.cents ? toCents(out0) : out0;
+}
+
+/** Euros -> céntimos enteros. Math.round absorbe la representación binaria (12.34 * 100 = 1233.999…). */
+export function toCents(e: EngineData): EngineData {
+  const c = (v: number) => Math.round(v * 100);
+  const cn = (v: number | null) => (v === null ? null : c(v));
+  return {
+    accounts: e.accounts.map((a) => ({ ...a, initialBalance: c(a.initialBalance) })),
+    salaries: e.salaries.map((s) => ({ ...s, gross: c(s.gross), revisions: s.revisions.map((r) => ({ ...r, gross: c(r.gross) })) })),
+    overtimes: e.overtimes.map((o) => ({ ...o, gross: c(o.gross) })),
+    fixedExpenses: e.fixedExpenses.map((f) => ({
+      ...f, amount: c(f.amount), revisions: f.revisions.map((r) => (r.amount !== undefined ? { ...r, amount: c(r.amount) } : r)),
+    })),
+    instances: e.instances.map((i) => ({ ...i, amount: cn(i.amount) })),
+    budgets: e.budgets.map((b) => ({ ...b, amount: c(b.amount), revisions: b.revisions?.map((r) => ({ ...r, amount: c(r.amount) })) })),
+    expenses: e.expenses.map((x) => ({ ...x, amount: c(x.amount) })),
+    incomes: e.incomes.map((x) => ({ ...x, amount: c(x.amount) })),
+    transfers: e.transfers.map((t) => ({ ...t, amount: c(t.amount), outstanding: cn(t.outstanding) })),
+    settlements: e.settlements.map((s) => ({ ...s, amount: c(s.amount) })),
+  };
+}
+
+function fromDatasetEuros(ds: Dataset): EngineData {
   const d = ds.docs;
   const main = ds.profile.settings.mainAccountId;
   const out: EngineData = {
@@ -91,7 +127,10 @@ export function fromDataset(ds: Dataset): EngineData {
   out.instances.sort(byId);
 
   for (const [id, b] of entries(d.budgets)) {
-    out.budgets.push({ id, categoryId: b.categoryId ?? null, accountId: b.accountId ?? null, amount: b.amount, start: b.start, end: b.end ?? null });
+    out.budgets.push({
+      id, categoryId: b.categoryId ?? null, accountId: b.accountId ?? null, amount: b.amount, start: b.start, end: b.end ?? null,
+      ...(b.revisions?.length ? { revisions: b.revisions.map((r) => ({ from: r.from, amount: r.amount })) } : {}),
+    });
   }
 
   for (const [id, m] of entries(d.movements)) {
@@ -108,6 +147,7 @@ export function fromDataset(ds: Dataset): EngineData {
       out.transfers.push({
         id, date: m.date, amount: m.amount, from: m.accountId ?? null, to: m.toAccountId ?? null,
         description: m.description ?? "", isLoan,
+        isOwnRefund: m.transferKind === "ownExpenseRefund" || m.description === "Transferencia automatica gastos",
         status: m.loan?.status ?? "pending", outstanding: m.loan ? m.loan.outstanding : null,
       });
     }

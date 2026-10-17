@@ -40,7 +40,11 @@ export interface FixedExpenseDoc {
   payments: Record<Month, FixedPayment>;
 }
 
-export interface BudgetDoc { categoryId: string | null; accountId: string | null; amount: number; start: IsoDate; end: IsoDate | null }
+export interface BudgetDoc {
+  categoryId: string | null; accountId: string | null; amount: number; start: IsoDate; end: IsoDate | null;
+  /** Nuevo importe a partir de un mes (B3). */
+  revisions?: { from: Month; amount: number }[];
+}
 
 export interface CardInfo { cardId: string; chargeMonth: Month | null; reserveIn: "purchase" | "charge" }
 export interface MovementDoc {

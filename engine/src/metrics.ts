@@ -2,20 +2,26 @@
  * Port de engine_metrics() de tools/migrate/salary_migrate/verify.py: produce las
  * mismas claves que los ficheros de fixtures/reference/. Solo para tests y validación.
  */
-import { FinanceCore, outstandingOf } from "./core";
+import { FinanceCore, LEGACY_OPTIONS, outstandingOf, type EngineOptions } from "./core";
 import type { EngineData } from "./data";
 import type { Month } from "./months";
 import { pySum } from "./pymath";
 
 export type Metrics = Map<string, number>;
 
-export function engineMetrics(data: EngineData, current: Month, minMonth: Month, months: Month[]): Metrics {
-  const core = new FinanceCore(data, current, minMonth);
+/**
+ * Por defecto con LEGACY_OPTIONS: es el contrato de fixtures/reference (la app vieja).
+ * Con opts.cents los datos vienen en céntimos y las cifras se devuelven en euros.
+ */
+export function engineMetrics(data: EngineData, current: Month, minMonth: Month, months: Month[],
+                              opts: EngineOptions = LEGACY_OPTIONS): Metrics {
+  const core = new FinanceCore(data, current, minMonth, opts);
+  const unit = opts.cents ? 100 : 1;
   const out: Metrics = new Map();
   const accounts = data.accounts.map((a) => a.id);
   const main = data.accounts.find((a) => a.isMain)?.id ?? null;
   const put = (key: string, value: unknown) => {
-    if (typeof value === "number") out.set(key, value);
+    if (typeof value === "number") out.set(key, key.endsWith("|settled") ? value : value / unit);
   };
 
   for (const m of months) {
@@ -43,7 +49,7 @@ export function engineMetrics(data: EngineData, current: Month, minMonth: Month,
       for (const [cat, v] of core.rawCategoryExpenses(m, a)) put(`${m}|${a}|raw_category|${cat}`, v);
     }
     if (main) {
-      for (const [acc, v] of core.propioExpensesByAccount(m, main)) put(`${m}|propios|${acc}`, v);
+      for (const [acc, v] of core.ownExpensesPending(m, main)) put(`${m}|propios|${acc}`, v);
     }
     const byTipo = new Map<string, number>();
     for (const o of core.pendingObligations(m)) byTipo.set(o.tipo, (byTipo.get(o.tipo) ?? 0) + o.monto);

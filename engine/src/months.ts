@@ -29,3 +29,16 @@ export function monthRange(first: Month, last: Month): Month[] {
   for (let m = first; m <= last; m = addMonths(m, 1)) out.push(m);
   return out;
 }
+
+/**
+ * D5: "mes actual" según la zona horaria del usuario (por defecto Europe/Madrid), no la del
+ * servidor. La app vieja usaba el reloj del servidor en UTC: entre las 00:00 y las 02:00 del
+ * día 1 en Madrid creía que seguía el mes anterior. El motor nunca llama a esto por su cuenta:
+ * la app calcula el mes y se lo pasa.
+ */
+export function currentMonthInTimeZone(timeZone = "Europe/Madrid", now: Date = new Date()): Month {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit" }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")!.value;
+  const m = parts.find((p) => p.type === "month")!.value;
+  return `${y}-${m}`;
+}

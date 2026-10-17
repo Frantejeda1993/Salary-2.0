@@ -52,6 +52,7 @@ export function toEngine(L: Legacy): EngineData {
       id: id(t, "t"), date: t.fecha, amount: t.monto, from: t.cuenta_origen ?? null, to: t.cuenta_destino ?? null,
       description: t.descripcion ?? "", isLoan: !!t.is_loan, status: t.status ?? "pending",
       outstanding: t.outstanding_amount ?? null,
+      isOwnRefund: t.descripcion === "Transferencia automatica gastos",
     })),
     // Mismo orden en que se escriben, igual que las listas de los tests de Python.
     settlements: L.credit_settlements.map((s) => ({ id: id(s, "st"), accountId: s.account_id, chargeMonth: s.mes_cargo, date: s.fecha, amount: s.monto })),

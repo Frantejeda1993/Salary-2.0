@@ -11,11 +11,13 @@
  * y test_pages_smoke (UI de Streamlit).
  */
 import { describe, expect, it } from "vitest";
-import { FinanceCore, fixedAmountForMonth } from "../src";
+import { CURRENT_OPTIONS, FinanceCore, fixedAmountForMonth } from "../src";
 import { d, emptyData, toEngine, type Legacy } from "./legacy";
 
 const MAIN = "main";
-const core = (L: Legacy, current: string, min = "2026-02") => new FinanceCore(toEngine(L), current, min);
+// Reglas con el motor corregido (Fase 4b) en euros; el cálculo en céntimos tiene sus propios tests.
+const EUROS = { ...CURRENT_OPTIONS, cents: false };
+const core = (L: Legacy, current: string, min = "2026-02") => new FinanceCore(toEngine(L), current, min, EUROS);
 const approx = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
 
 // ============================================================================ test_finance_rules.py
@@ -406,7 +408,9 @@ describe("dashboard", () => {
     data.expenses = [{ id: "cc", account_id: "main", categoria_id: "x", monto: 120, fecha: d(2026, 3, 9), metodo_pago: "credito", mes_cargo: "2026-04" }];
     data.transfers = [{ id: "l", cuenta_origen: "sec", cuenta_destino: "main", monto: 200, fecha: d(2026, 2, 1), is_loan: true, status: "pending", outstanding_amount: 150 }];
     const tipos = new Set(core(data, "2026-04").pendingObligations("2026-04").map((o) => `${o.tipo}:${o.monto}`));
-    expect(tipos).toEqual(new Set(["Gasto fijo:700", "Tarjeta:120", "Préstamo:150"]));
+    // CAMBIO DE REGLA (D3, Fase 4b): el gym propio pagado por la cuenta secundaria en abril sigue
+    // pendiente de reembolso desde la principal. La app vieja lo daba por saldado (bug B2).
+    expect(tipos).toEqual(new Set(["Gasto fijo:700", "Tarjeta:120", "Préstamo:150", "Reembolso propio:40"]));
   });
 
   it("impacto de préstamos en ambos sentidos", () => {

@@ -1,18 +1,51 @@
 /**
- * Port 1:1 de services/finance_core.py (repo Frantejeda1993/Salary, commit b93f352).
+ * Motor de cálculo de Salary 2.0.
  *
- * Fase 4a: misma lógica, mismos bugs, mismo orden de operaciones. Cada método
- * lleva el nombre del método Python que porta. Convenciones:
+ * Base: port 1:1 de services/finance_core.py (repo Frantejeda1993/Salary, commit
+ * b93f352), Fase 4a. Convenciones para que sea idéntico bit a bit:
  *   - `sum(...)` de Python  -> pySum(...)   (suma compensada de Neumaier)
  *   - `x += y` de Python    -> x += y
  *   - dict de Python        -> Map (conserva el orden de inserción)
- * Las correcciones acordadas (B1, B2, A1, B3, B5–B7, D5, D8) llegan en la Fase 4b.
+ *
+ * Fase 4b: correcciones acordadas, cada una tras una opción (EngineOptions).
+ * Con LEGACY_OPTIONS el motor reproduce exactamente la app vieja (lo comprueban
+ * los ficheros de fixtures/reference); con CURRENT_OPTIONS es el motor corregido.
+ * Ver docs en engine/README.md y la especificación (registro de decisiones).
  */
 import type { EBudget, EExpense, EngineData, ESalary, ESettlement, ETransfer } from "./data";
 import { addMonths, isActiveInMonth, monthOf, monthRange, type IsoDate, type Month } from "./months";
 import { cmp, pyMax, pyMin, pySum } from "./pymath";
 
 export const AUTO_TRANSFER_DESCRIPTION = "Transferencia automatica gastos";
+
+export interface EngineOptions {
+  /** B6: un pago de un gasto fijo fuera de su periodo se ignora (antes restaba en el saldo real). */
+  fixB6: boolean;
+  /** B1: el saldo proyectado de un mes futuro encadena el proyectado de los meses intermedios. */
+  fixB1: boolean;
+  /** D3 + A1: gastos propios acumulados hasta reembolsarse; el proyectado mostrado es lo que se arrastra. */
+  fixD3: boolean;
+  /** Cálculo en céntimos enteros: los datos deben venir en céntimos (fromDataset(ds, { cents: true })). */
+  cents: boolean;
+}
+
+export const LEGACY_OPTIONS: EngineOptions = Object.freeze({ fixB6: false, fixB1: false, fixD3: false, cents: false });
+export const CURRENT_OPTIONS: EngineOptions = Object.freeze({ fixB6: true, fixB1: true, fixD3: true, cents: true });
+
+/** Redondeo al entero más cercano, mitades hacia fuera (como una nómina), tolerante al ruido binario. */
+export function roundHalfUp(v: number): number {
+  const r = Math.floor(Math.abs(v) + 0.5 + 1e-9);
+  return v < 0 ? -r : r;
+}
+
+/** Importe de un budget en un mes, con sus revisiones (B3). Sin revisiones: su importe. */
+export function budgetAmountForMonth(b: EBudget, month: Month): number {
+  let value = b.amount;
+  for (const r of [...(b.revisions ?? [])].sort((x, y) => cmp(x.from, y.from))) {
+    if (r.from <= month) value = r.amount;
+  }
+  return value;
+}
 
 // ----------------------------------------------------------------------------- tarjeta
 
@@ -62,7 +95,7 @@ export interface BudgetDetail {
 }
 
 /** _absorb_deficit: cubre un resultado negativo con el margen de los budgets, en proporción. */
-function absorbDeficit(resultado: number, details: BudgetDetail[], trackAbsorbed: boolean): number {
+function absorbDeficit(resultado: number, details: BudgetDetail[], trackAbsorbed: boolean, cents = false): number {
   if (resultado >= 0) return resultado;
   const positive = details.filter((bd) => bd.available > 0);
   const totalAvailable = pySum(positive.map((bd) => bd.available));
@@ -75,6 +108,7 @@ function absorbDeficit(resultado: number, details: BudgetDetail[], trackAbsorbed
       share = remaining;
     } else {
       share = absorption * (bd.available / totalAvailable);
+      if (cents) share = roundHalfUp(share); // el último se lleva el resto: el total cuadra al céntimo
       remaining -= share;
     }
     if (trackAbsorbed) bd.absorbed = share;
@@ -100,6 +134,8 @@ export interface MonthSummary {
   ingreso_total: number; gastos_fijos: number; presupuestos: number; gastos_reales: number; ingresos_extra: number;
   remaining_from_previous_month: number; resultado_real: number; resultado_proyectado: number;
   resultado_proyectado_pre_absorcion: number; deuda_tarjeta_arrastrada?: number;
+  /** D3: reembolsos de gastos propios pendientes que el proyectado ya descuenta (solo con fixD3). */
+  reembolsos_propios_pendientes?: number;
   resultado_real_details: null | { main_account_id: string; pending_loans: ETransfer[] };
 }
 
@@ -113,6 +149,7 @@ export class FinanceCore {
     readonly data: EngineData,
     readonly currentMonth: Month,
     readonly minManagedMonth: Month,
+    readonly opts: EngineOptions = CURRENT_OPTIONS,
   ) {
     // dict comprehension de Python: ante claves repetidas gana la última.
     this.settlementsByKey = new Map(data.settlements.map((s) => [`${s.accountId}|${s.chargeMonth}`, s]));
@@ -242,7 +279,10 @@ export class FinanceCore {
       }
       const overtime = pySum(this.data.overtimes.filter((o) => o.salaryId === salaryId && o.month === month).map((o) => o.gross ?? 0));
       const deducciones = pySum(
-        salary.deductions.filter((d) => d.name).map((d) => (base + atrasos + (d.appliesToExtras ? overtime : 0)) * (d.rate ?? 0)),
+        salary.deductions.filter((d) => d.name).map((d) => {
+          const v = (base + atrasos + (d.appliesToExtras ? overtime : 0)) * (d.rate ?? 0);
+          return this.opts.cents ? roundHalfUp(v) : v; // cada deducción, al céntimo
+        }),
       );
       return { base, atrasos, horas_extra: overtime, deducciones, neto: base + atrasos + overtime - deducciones };
     });
@@ -325,6 +365,79 @@ export class FinanceCore {
     });
   }
 
+  /**
+   * Reembolsos de gastos propios pendientes por cuenta, en el mes `month`.
+   * Sin fixD3: la regla vieja (propioExpensesByAccount).
+   * Con fixD3 (decisión D3 + A1):
+   *   debido(cuenta, mes) = gastos propios de esa cuenta en ese mes; en meses cerrados solo si
+   *     se marcaron pagados (si no se pagó, no hay nada que reembolsar); en el actual y futuros,
+   *     el importe previsto (o el pagado, si ya se marcó);
+   *   reembolsado(cuenta, mes) = transferencias de reembolso de la principal a esa cuenta;
+   *   pendiente en un mes cerrado o en el actual = lo debido acumulado − lo reembolsado acumulado
+   *     (no desaparece al cerrar el mes);
+   *   pendiente en un mes futuro = lo de ese mes (se asume que se reembolsa cada mes).
+   * Un saldo negativo (reembolsaste de más) compensa meses siguientes, pero nunca suma.
+   */
+  ownExpensesPending(month: Month, mainAccountId: string): Map<string, number> {
+    if (!this.opts.fixD3) return this.propioExpensesByAccount(month, mainAccountId);
+    return this.memo(`own|${month}|${mainAccountId}`, () => {
+      const out = new Map<string, number>();
+      if (month > this.currentMonth) {
+        for (const [acc, owed] of this.ownOwed(month, mainAccountId)) {
+          const left = owed - (this.ownRefunds(month, mainAccountId).get(acc) ?? 0);
+          if (left > 0) out.set(acc, left);
+        }
+        return out;
+      }
+      for (const [acc, bal] of this.ownBalance(month, mainAccountId)) if (bal > 0) out.set(acc, bal);
+      return out;
+    });
+  }
+
+  /** Lo debido por gastos propios en `month`, por cuenta (fixD3). */
+  ownOwed(month: Month, mainAccountId: string): Map<string, number> {
+    return this.memo(`owed|${month}|${mainAccountId}`, () => {
+      const out = new Map<string, number>();
+      for (const fe of this.fixedExpensesForMonth(month)) {
+        const acc = fe.account_id;
+        if (!fe.isOwn || !acc || acc === mainAccountId) continue;
+        let amount: number;
+        if (month < this.currentMonth) {
+          if (fe.estado !== "pagado") continue;
+          amount = fe.monto_pagado !== null ? fe.monto_pagado : fe.monto;
+        } else {
+          amount = fe.estado === "pagado" && fe.monto_pagado !== null ? fe.monto_pagado : fe.monto;
+        }
+        out.set(acc, (out.get(acc) ?? 0) + amount);
+      }
+      return out;
+    });
+  }
+
+  /** Reembolsos hechos desde la principal en `month`, por cuenta (fixD3). */
+  ownRefunds(month: Month, mainAccountId: string): Map<string, number> {
+    return this.memo(`refunds|${month}|${mainAccountId}`, () => {
+      const out = new Map<string, number>();
+      for (const t of this.data.transfers) {
+        if (!t.isOwnRefund || t.from !== mainAccountId || !t.to || monthOf(t.date) !== month) continue;
+        out.set(t.to, (out.get(t.to) ?? 0) + t.amount);
+      }
+      return out;
+    });
+  }
+
+  /** Pendiente acumulado al final de `month` (meses cerrados y el actual), desde el inicio de gestión. */
+  private ownBalance(month: Month, mainAccountId: string): Map<string, number> {
+    return this.memo(`ownbal|${month}|${mainAccountId}`, () => {
+      const prev = month > this.minManagedMonth ? this.ownBalance(addMonths(month, -1), mainAccountId) : new Map<string, number>();
+      const out = new Map(prev);
+      if (month < this.minManagedMonth) return out;
+      for (const [acc, v] of this.ownOwed(month, mainAccountId)) out.set(acc, (out.get(acc) ?? 0) + v);
+      for (const [acc, v] of this.ownRefunds(month, mainAccountId)) out.set(acc, (out.get(acc) ?? 0) - v);
+      return out;
+    });
+  }
+
   // ----- resultados del mes
 
   monthRealResult(accountId: string, month: Month): number {
@@ -357,10 +470,11 @@ export class FinanceCore {
       const details: BudgetDetail[] = [];
       for (const b of budgets) {
         const spent = raw.get(b.categoryId as string) ?? 0;
-        budgetImpact += pyMax(b.amount, pyMax(spent, 0));
+        const amount = budgetAmountForMonth(b, month);
+        budgetImpact += pyMax(amount, pyMax(spent, 0));
         details.push({
-          budget_id: b.id, categoria_id: b.categoryId, presupuesto: b.amount, real_spent: spent,
-          available: b.amount - pyMax(spent, 0), absorbed: 0,
+          budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent,
+          available: amount - pyMax(spent, 0), absorbed: 0,
         });
       }
       const budgetCats = new Set(budgets.map((b) => b.categoryId));
@@ -368,7 +482,7 @@ export class FinanceCore {
       const creditCarried = this.creditDebtCarriedInto(accountId, month);
 
       const pre = income + remainingFromPrevious - fixedTotal - budgetImpact - nonBudgeted - transfersOut - creditCarried;
-      const resultado = absorbDeficit(pre, details, true);
+      const resultado = absorbDeficit(pre, details, true, this.opts.cents);
       return { resultado, resultado_pre_absorcion: pre, budget_details: details, deuda_tarjeta_arrastrada: creditCarried };
     });
   }
@@ -386,7 +500,7 @@ export class FinanceCore {
         : 0;
       for (let m = this.currentMonth; m <= prev; m = addMonths(m, 1)) {
         const proj = this.monthProjectedResult(mainAccountId, m, carry);
-        const propios = pySum(this.propioExpensesByAccount(m, mainAccountId).values());
+        const propios = pySum(this.ownExpensesPending(m, mainAccountId).values());
         carry = proj.resultado - propios;
       }
       return carry;
@@ -428,7 +542,8 @@ export class FinanceCore {
       const fes = new Map(this.data.fixedExpenses.map((fe) => [fe.id, fe]));
       for (const inst of this.data.instances) {
         const fe = fes.get(inst.fixedId);
-        if (fe && inst.status === "pagado" && (inst.month ?? "") <= target && fixedAccountForMonth(fe, inst.month) === accountId) {
+        if (fe && inst.status === "pagado" && (inst.month ?? "") <= target && fixedAccountForMonth(fe, inst.month) === accountId
+            && (!this.opts.fixB6 || active(fe, inst.month))) {
           balance -= inst.amount !== null ? inst.amount : fixedAmountForMonth(fe, inst.month);
         }
       }
@@ -441,6 +556,13 @@ export class FinanceCore {
   projectedBalance(accountId: string, month: Month | null = null): { resultado: number; budget_details: BudgetDetail[] } {
     return this.memo(`pb|${accountId}|${month}`, () => {
       const target = month || this.currentMonth;
+      if (this.opts.fixB1 && target > this.currentMonth) {
+        // B1: se parte del saldo proyectado del mes anterior y se aplica el proyectado de este mes
+        // (sueldos, fijos, budgets, gastos y transferencias), con absorción de déficit como en el arrastre.
+        const prev = this.projectedBalance(accountId, addMonths(target, -1)).resultado;
+        const pr = this.monthProjectedResult(accountId, target, prev);
+        return { resultado: pr.resultado, budget_details: pr.budget_details };
+      }
       const real = this.realBalance(accountId, target);
       const fixedPending = pySum(
         this.fixedExpensesForMonth(target).filter((fe) => fe.account_id === accountId && fe.estado === "impagado").map((fe) => fe.monto),
@@ -452,11 +574,12 @@ export class FinanceCore {
         if (b.accountId !== accountId) continue;
         const spent = raw.get(b.categoryId as string) ?? 0;
         const effective = pyMax(spent, 0);
-        details.push({ budget_id: b.id, categoria_id: b.categoryId, presupuesto: b.amount, real_spent: spent, available: b.amount - effective });
-        if (effective < b.amount) pendingBudget += b.amount - effective;
+        const amount = budgetAmountForMonth(b, target);
+        details.push({ budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent, available: amount - effective });
+        if (effective < amount) pendingBudget += amount - effective;
       }
       const creditPending = this.creditOutstanding(accountId, target, true);
-      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending, details, false);
+      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending, details, false, this.opts.cents);
       return { resultado, budget_details: details };
     });
   }
@@ -483,7 +606,7 @@ export class FinanceCore {
       }
       const main = this.data.accounts.find((a) => a.isMain);
       if (main) {
-        for (const [acc, amt] of this.propioExpensesByAccount(month, main.id)) {
+        for (const [acc, amt] of this.ownExpensesPending(month, main.id)) {
           out.push({ tipo: "Reembolso propio", concepto: "Transferir a cuenta", account_id: acc, monto: amt });
         }
         for (const loan of this.pendingLoansForAccount(main.id)) {
@@ -525,7 +648,7 @@ export class FinanceCore {
       const summary: MonthSummary = {
         ingreso_total: pySum(d.salaries.filter((s) => active(s, month)).map((s) => this.salaryNet(s.id, month))),
         gastos_fijos: pySum(this.fixedExpensesForMonth(month).map((fe) => fe.monto)),
-        presupuestos: pySum(this.activeBudgets(month).map((b) => b.amount)),
+        presupuestos: pySum(this.activeBudgets(month).map((b) => budgetAmountForMonth(b, month))),
         gastos_reales: pySum(d.expenses.filter((e) => monthOf(e.date) === month).map((e) => e.amount)),
         ingresos_extra: pySum(d.incomes.filter((i) => monthOf(i.date) === month).map((i) => i.amount)),
         remaining_from_previous_month: 0,
@@ -537,11 +660,15 @@ export class FinanceCore {
       if (main) {
         const carry = this.remainingFromPreviousMonth(month, main.id);
         const proj = this.monthProjectedResult(main.id, month, carry);
+        // A1: en meses abiertos el proyectado mostrado ya descuenta los reembolsos propios
+        // pendientes, así que es exactamente lo que se arrastra al mes siguiente.
+        const own = this.opts.fixD3 && month >= this.currentMonth ? pySum(this.ownExpensesPending(month, main.id).values()) : 0;
+        if (this.opts.fixD3 && month >= this.currentMonth) summary.reembolsos_propios_pendientes = own;
         Object.assign(summary, {
           remaining_from_previous_month: carry,
           resultado_real: this.monthRealResult(main.id, month) + carry,
-          resultado_proyectado: proj.resultado,
-          resultado_proyectado_pre_absorcion: proj.resultado_pre_absorcion,
+          resultado_proyectado: proj.resultado - own,
+          resultado_proyectado_pre_absorcion: proj.resultado_pre_absorcion - own,
           deuda_tarjeta_arrastrada: proj.deuda_tarjeta_arrastrada,
           resultado_real_details: { main_account_id: main.id, pending_loans: this.pendingLoansForAccount(main.id) },
         });
