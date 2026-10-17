@@ -124,3 +124,33 @@ def test_transform_does_not_mutate_input():
     before = copy.deepcopy(L)
     plan_for(L)
     assert L == before
+
+
+def test_stale_es_propio_on_expenses_is_dropped_with_one_warning():
+    L = dataset(14)
+    for e in L["expenses"]:
+        e["es_propio"] = False
+    p = plan_for(L)
+    assert all("extra" not in m["legacy"] for m in p.docs["movements"].values() if m["type"] == "expense")
+    ws = [w for w in p.warnings if w["code"] == "ignored_field"]
+    assert len(ws) == 1 and ws[0]["count"] == len(L["expenses"])
+    assert not any(w["code"] == "unknown_fields" for w in p.warnings)
+
+
+def _two_budgets(first_end, second_start):
+    L = dataset(15)
+    L["budgets"] = [
+        {"id": "b1", "categoria_id": L["categories"][0]["id"], "account_id": L["accounts"][0]["id"],
+         "monto": 100.0, "fecha_inicio": ts(2026, 3), "fecha_fin": first_end},
+        {"id": "b2", "categoria_id": L["categories"][0]["id"], "account_id": L["accounts"][0]["id"],
+         "monto": 150.0, "fecha_inicio": second_start, "fecha_fin": None}]
+    return [w for w in plan_for(L).warnings if w["code"] == "duplicate_budget"]
+
+
+def test_budget_replaced_by_a_new_one_is_not_a_duplicate():
+    assert _two_budgets(ts(2026, 5, 31), ts(2026, 6, 1)) == []
+
+
+def test_overlapping_budgets_are_flagged():
+    ws = _two_budgets(ts(2026, 6, 30), ts(2026, 6, 1))
+    assert len(ws) == 1 and "2026-06–2026-06" in ws[0]["message"]

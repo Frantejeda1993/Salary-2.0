@@ -58,6 +58,12 @@ KNOWN_FIELDS = {
     "credit_settlements": {"account_id", "mes_cargo", "fecha", "monto", "created_at"},
 }
 
+# Campos que la app vieja ya no usa y que Francisco ha confirmado como restos de
+# una versión anterior: no se migran (siguen en el backup) y se avisa una sola vez.
+IGNORED_FIELDS = {
+    "expenses": {"es_propio"},   # confirmado 17-oct-2026: error de una versión antigua
+}
+
 # Esquema legacy de deducciones (copiado de models/salary.py de la app vieja).
 LEGACY_DEDUCTION_FIELDS = [
     ("Cont. Común", "cont_comun", "cont_comun_aplica_extras", 15.0),
@@ -129,9 +135,14 @@ class _Ctx:
         self.plan = plan
         self.legacy = legacy
         self.ids = {c: {d["id"] for d in legacy.get(c, [])} for c in LEGACY_COLLECTIONS}
+        self.ignored: dict = {}
 
     def legacy_block(self, coll: str, doc: dict, **more) -> dict:
-        extra = {k: v for k, v in doc.items() if k != "id" and k not in KNOWN_FIELDS.get(coll, set())}
+        ignored = IGNORED_FIELDS.get(coll, set())
+        for k in ignored & set(doc):
+            self.ignored[(coll, k)] = self.ignored.get((coll, k), 0) + 1
+        extra = {k: v for k, v in doc.items()
+                 if k != "id" and k not in KNOWN_FIELDS.get(coll, set()) and k not in ignored}
         block = {"collection": coll, **{k: v for k, v in more.items() if v is not None}}
         for k, v in extra.items():
             if isinstance(v, dict) and v.get("__type") == "repr":
@@ -371,11 +382,14 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
     seen_budget: dict = {}
     for b in L["budgets"]:
         key = (b.get("categoria_id"), b.get("account_id"))
-        if key in seen_budget:
-            plan.warn("duplicate_budget", f"budgets/{b['id']} y budgets/{seen_budget[key]} son de la misma "
-                      "categoría y cuenta. Si sus periodos se solapan, el gasto cuenta dos veces (bug B3). "
-                      "Se migran ambos para conservar los números actuales.", ids=[seen_budget[key], b["id"]])
-        seen_budget.setdefault(key, b["id"])
+        lo = month_str(b["fecha_inicio"]) if b.get("fecha_inicio") else "0000-00"
+        hi = month_str(b["fecha_fin"]) if b.get("fecha_fin") else "9999-12"
+        for other_id, o_lo, o_hi in seen_budget.get(key, []):
+            if lo <= o_hi and o_lo <= hi:
+                plan.warn("duplicate_budget", f"budgets/{other_id} y budgets/{b['id']} son de la misma categoría "
+                          f"y cuenta y se solapan en {max(lo, o_lo)}–{min(hi, o_hi)}: ahí el gasto cuenta dos veces "
+                          "(bug B3). Se migran ambos para conservar los números actuales.", ids=[other_id, b["id"]])
+        seen_budget.setdefault(key, []).append((b["id"], lo, hi))
         D["budgets"][b["id"]] = {
             "categoryId": ctx.ref("budgets", b, "categoria_id", "categories"),
             "accountId": ctx.ref("budgets", b, "account_id", "accounts"),
@@ -511,6 +525,10 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
     if L["monthly_account_snapshots"]:
         plan.warn("snapshots_skipped", f"{len(L['monthly_account_snapshots'])} documentos de "
                   "monthly_account_snapshots no se migran (ningún cálculo los usa). Están en el backup.")
+
+    for (coll, k), n in sorted(ctx.ignored.items()):
+        plan.warn("ignored_field", f"'{k}' en {n} documento(s) de {coll}: resto de una versión antigua, "
+                  "no se migra (está en el backup).", collection=coll, field=k, count=n)
 
     # ----- perfil
     plan.profile = {
