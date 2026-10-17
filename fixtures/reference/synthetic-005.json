@@ -2185,8 +2185,7 @@
    "budget_exceeded": 6,
    "card_debt_carried": 4,
    "carry_nonzero_closed": 9,
-   "carry_nonzero_future": 24,
-   "salary_arrears": 37
+   "carry_nonzero_future": 24
   }
  },
  "dataset": {

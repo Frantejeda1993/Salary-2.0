@@ -79,25 +79,26 @@ def coverage(legacy: dict, cases: list) -> dict:
     """Qué escenarios contiene el fichero: sin esto, 'todos los tests pasan' no dice nada."""
     exp = legacy.get("expenses", [])
     c = Counter()
+    eps = 0.005  # por debajo del céntimo es ruido de coma flotante (p. ej. atrasos de 9e-13), no un escenario
     for case in cases:
         cur = case["currentMonth"]
         for k, v in case["metrics"].items():
             parts = k.split("|")
             if len(parts) >= 5 and parts[2] == "budget":
-                if parts[4] == "absorbed" and v > 0:
+                if parts[4] == "absorbed" and v > eps:
                     c["budget_absorbs_deficit"] += 1
-                if parts[4] == "available" and v < 0:
+                if parts[4] == "available" and v < -eps:
                     c["budget_exceeded"] += 1
             elif len(parts) == 3 and parts[1] == "summary":
-                if parts[2] == "remaining_from_previous_month" and v != 0:
+                if parts[2] == "remaining_from_previous_month" and abs(v) > eps:
                     c["carry_nonzero_closed" if parts[0] <= cur else "carry_nonzero_future"] += 1
-                if parts[2] == "resultado_proyectado_pre_absorcion" and v < 0:
+                if parts[2] == "resultado_proyectado_pre_absorcion" and v < -eps:
                     c["projected_pre_negative"] += 1
-                if parts[2] == "deuda_tarjeta_arrastrada" and v > 0:
+                if parts[2] == "deuda_tarjeta_arrastrada" and v > eps:
                     c["card_debt_carried"] += 1
-            elif len(parts) == 3 and parts[1] == "propios" and v > 0:
+            elif len(parts) == 3 and parts[1] == "propios" and v > eps:
                 c["own_expenses_pending"] += 1
-            elif len(parts) >= 4 and parts[1] == "salary" and parts[3] == "atrasos" and v != 0:
+            elif len(parts) >= 4 and parts[1] == "salary" and parts[3] == "atrasos" and abs(v) > eps:
                 c["salary_arrears"] += 1
     return {
         "per_case_totals": dict(sorted(c.items())),
