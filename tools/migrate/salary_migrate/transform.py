@@ -198,12 +198,22 @@ class _Ctx:
 
 # --------------------------------------------------------------------------- transform
 
-def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "Europe/Madrid") -> Plan:
-    """Convierte el snapshot viejo en un Plan de escritura para users/{uid}."""
+def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "Europe/Madrid",
+              own_expenses_from: str | None = None, refund_transfers: list | None = None) -> Plan:
+    """Convierte el snapshot viejo en un Plan de escritura para users/{uid}.
+
+    own_expenses_from: mes desde el que los reembolsos de gastos propios se controlan en la
+        app (antes se hacían fuera y se dan por saldados). Decisión D3, 17-oct-2026.
+    refund_transfers: ids (o prefijos únicos de 6+ caracteres) de transferencias normales que
+        fueron reembolsos de gastos propios; se marcan transferKind = ownExpenseRefund.
+        La descripción no se toca: el motor viejo (y la verificación) no cambian.
+    """
     plan = Plan(uid=uid, profile={})
     ctx = _Ctx(plan, legacy)
     L = {c: legacy.get(c, []) for c in LEGACY_COLLECTIONS}
     D = plan.docs
+
+    refund_ids = _resolve_refunds(legacy, refund_transfers or [], plan)
 
     for name in sorted(set(legacy) - set(LEGACY_COLLECTIONS)):
         plan.warn("unexpected_collection", f"La colección '{name}' ({len(legacy[name])} docs) no la usa la app "
@@ -463,7 +473,7 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
             "accountId": ctx.ref("transfers", t, "cuenta_origen", "accounts"),
             "toAccountId": ctx.ref("transfers", t, "cuenta_destino", "accounts"),
             "transferKind": "loan" if is_loan else ("ownExpenseRefund" if desc == AUTO_TRANSFER_DESCRIPTION
-                                                    else "normal"),
+                                                    or t["id"] in refund_ids else "normal"),
             "createdAt": iso_or_none(t.get("created_at")),
             "source": "migration",
             "legacy": ctx.legacy_block("transfers", t,
@@ -539,6 +549,7 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
             # Mismo significado que min_managed_month de la app vieja:
             # los meses <= startMonth no reciben arrastre del anterior.
             "startMonth": min_managed_month,
+            **({"ownExpensesFrom": own_expenses_from} if own_expenses_from else {}),
             "mainAccountId": main_id,
             "timezone": timezone,
             "currency": "EUR",
@@ -552,3 +563,24 @@ def transform(legacy: dict, uid: str, min_managed_month: str, timezone: str = "E
         "onboardingDone": True,
     }
     return plan
+
+
+def _resolve_refunds(legacy: dict, wanted: list, plan: Plan) -> set:
+    """Ids completos de las transferencias indicadas (acepta prefijos únicos de 6+ caracteres)."""
+    ids = [t["id"] for t in legacy.get("transfers", [])]
+    out = set()
+    for w in wanted:
+        w = w.strip()
+        if not w:
+            continue
+        matches = [i for i in ids if i == w] or ([i for i in ids if i.startswith(w)] if len(w) >= 6 else [])
+        if len(matches) != 1:
+            plan.error("bad_refund_id", f"--refund-transfers: '{w}' coincide con {len(matches)} transferencias "
+                       "(usa el id que muestra el comando own-expenses).")
+            continue
+        t = next(t for t in legacy["transfers"] if t["id"] == matches[0])
+        if t.get("is_loan"):
+            plan.error("bad_refund_id", f"--refund-transfers: {matches[0]} es un préstamo, no un reembolso.")
+            continue
+        out.add(matches[0])
+    return out

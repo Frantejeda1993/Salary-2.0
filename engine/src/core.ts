@@ -394,6 +394,20 @@ export class FinanceCore {
     });
   }
 
+  /**
+   * Reembolsos previstos en el saldo proyectado (decisión del 17-oct-2026, coherente con D3):
+   * en el mes actual se asume reembolsado todo lo pendiente y en cada mes futuro lo de ese mes;
+   * la principal lo paga (−) y la cuenta del gasto propio lo recibe (+). Solo con fixD3.
+   */
+  private ownRefundAdjustment(accountId: string, month: Month): number {
+    if (!this.opts.fixD3 || month < this.currentMonth) return 0;
+    const main = this.data.accounts.find((a) => a.isMain)?.id;
+    if (!main) return 0;
+    const pending = this.ownExpensesPending(month, main);
+    if (accountId === main) return -pySum(pending.values());
+    return pending.get(accountId) ?? 0;
+  }
+
   /** Lo debido por gastos propios en `month`, por cuenta (fixD3). */
   ownOwed(month: Month, mainAccountId: string): Map<string, number> {
     return this.memo(`owed|${month}|${mainAccountId}`, () => {
@@ -429,9 +443,12 @@ export class FinanceCore {
   /** Pendiente acumulado al final de `month` (meses cerrados y el actual), desde el inicio de gestión. */
   private ownBalance(month: Month, mainAccountId: string): Map<string, number> {
     return this.memo(`ownbal|${month}|${mainAccountId}`, () => {
-      const prev = month > this.minManagedMonth ? this.ownBalance(addMonths(month, -1), mainAccountId) : new Map<string, number>();
+      // Antes de ownExpensesFrom los reembolsos se hacían fuera de la app: se dan por saldados.
+      const from = this.data.settings?.ownExpensesFrom;
+      const start = from && from > this.minManagedMonth ? from : this.minManagedMonth;
+      const prev = month > start ? this.ownBalance(addMonths(month, -1), mainAccountId) : new Map<string, number>();
       const out = new Map(prev);
-      if (month < this.minManagedMonth) return out;
+      if (month < start) return out;
       for (const [acc, v] of this.ownOwed(month, mainAccountId)) out.set(acc, (out.get(acc) ?? 0) + v);
       for (const [acc, v] of this.ownRefunds(month, mainAccountId)) out.set(acc, (out.get(acc) ?? 0) - v);
       return out;
@@ -561,7 +578,7 @@ export class FinanceCore {
         // (sueldos, fijos, budgets, gastos y transferencias), con absorción de déficit como en el arrastre.
         const prev = this.projectedBalance(accountId, addMonths(target, -1)).resultado;
         const pr = this.monthProjectedResult(accountId, target, prev);
-        return { resultado: pr.resultado, budget_details: pr.budget_details };
+        return { resultado: pr.resultado + this.ownRefundAdjustment(accountId, target), budget_details: pr.budget_details };
       }
       const real = this.realBalance(accountId, target);
       const fixedPending = pySum(
@@ -579,7 +596,8 @@ export class FinanceCore {
         if (effective < amount) pendingBudget += amount - effective;
       }
       const creditPending = this.creditOutstanding(accountId, target, true);
-      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending, details, false, this.opts.cents);
+      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending, details, false, this.opts.cents)
+        + this.ownRefundAdjustment(accountId, target);
       return { resultado, budget_details: details };
     });
   }

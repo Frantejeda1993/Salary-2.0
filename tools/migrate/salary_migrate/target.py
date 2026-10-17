@@ -85,7 +85,7 @@ class Target:
         else:
             cur_s = existing_profile.get("settings", {})
             new_s = plan.profile["settings"]
-            for k in ("mainAccountId", "startMonth"):
+            for k in ("mainAccountId", "startMonth", "ownExpensesFrom"):
                 if cur_s.get(k) != new_s.get(k):
                     d.profile = "differs"
                     d.profile_notes.append(f"settings.{k}: destino={cur_s.get(k)!r}, origen={new_s.get(k)!r}")

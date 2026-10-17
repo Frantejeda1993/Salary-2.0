@@ -40,6 +40,7 @@ export interface ETransfer {
 export interface ESettlement { id: string; accountId: string; chargeMonth: Month; date: IsoDate; amount: number }
 
 export interface EngineData {
+  settings?: { ownExpensesFrom?: Month };
   accounts: EAccount[];
   salaries: ESalary[];
   overtimes: EOvertime[];
@@ -71,6 +72,7 @@ export function toCents(e: EngineData): EngineData {
   const c = (v: number) => Math.round(v * 100);
   const cn = (v: number | null) => (v === null ? null : c(v));
   return {
+    settings: e.settings,
     accounts: e.accounts.map((a) => ({ ...a, initialBalance: c(a.initialBalance) })),
     salaries: e.salaries.map((s) => ({ ...s, gross: c(s.gross), revisions: s.revisions.map((r) => ({ ...r, gross: c(r.gross) })) })),
     overtimes: e.overtimes.map((o) => ({ ...o, gross: c(o.gross) })),
@@ -90,6 +92,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
   const d = ds.docs;
   const main = ds.profile.settings.mainAccountId;
   const out: EngineData = {
+    settings: ds.profile.settings.ownExpensesFrom ? { ownExpensesFrom: ds.profile.settings.ownExpensesFrom } : undefined,
     accounts: [], salaries: [], overtimes: [], fixedExpenses: [], instances: [], budgets: [],
     expenses: [], incomes: [], transfers: [], settlements: [],
   };

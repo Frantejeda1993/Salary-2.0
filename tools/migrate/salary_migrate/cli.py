@@ -143,7 +143,8 @@ def cmd_migrate(args) -> int:
             raise SystemExit(f"Origen y destino son el mismo proyecto ({src_pid}). Abortado.")
     legacy, meta = _read_source(args)
 
-    plan = transform(legacy, args.uid, args.min_month, timezone=args.timezone)
+    plan = transform(legacy, args.uid, args.min_month, timezone=args.timezone,
+                     own_expenses_from=args.own_expenses_from, refund_transfers=_split(args.refund_transfers))
     _print_issues({"errors": plan.errors, "warnings": plan.warnings})
     if not plan.ok:
         _save_report(Path(args.reports_dir), "migrate-blocked", {"errors": plan.errors, "warnings": plan.warnings})
@@ -250,11 +251,7 @@ def cmd_reference(args) -> int:
     from . import reference as rf
     from .verify import load_engine
     _check_month(args.start_month, "--start-month")
-    backups = sorted(Path(args.backup_dir).glob("backup-*.json"))
-    path = Path(args.backup) if args.backup else (backups[-1] if backups else None)
-    if not path:
-        raise SystemExit(f"No hay backups en {args.backup_dir}. Ejecuta antes 'backup' o 'inventory'.")
-    legacy, meta = read_backup(path)
+    legacy, meta = read_backup(_latest_backup(args))
     print(f"Backup: {meta['file']} (sha256 {meta['sha256'][:12]}…)")
     FinanceCore = load_engine(args.engine_path)
     first = FinanceCore(legacy, args.start_month, args.start_month).first_data_month() or args.start_month
@@ -264,13 +261,16 @@ def cmd_reference(args) -> int:
 
     out = Path(args.out)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    real = rf.make_reference(FinanceCore, legacy, "real", args.start_month, currents, src)
+    extra = {"own_expenses_from": args.own_expenses_from, "refund_transfers": _split(args.refund_transfers)}
+    real = rf.make_reference(FinanceCore, legacy, "real", args.start_month, currents, src, **extra)
     rf.write_reference(real, out / f"real-{stamp}.json")
     _print_coverage("REAL (tus datos, no salen de tu ordenador)", real)
 
     anon_legacy = rf.anonymize(legacy)
     anon = rf.make_reference(FinanceCore, anon_legacy, "anonymized", args.start_month, currents,
-                             {"engineCommit": src["engineCommit"]})
+                             {"engineCommit": src["engineCommit"]},
+                             own_expenses_from=args.own_expenses_from,
+                             refund_transfers=rf.map_ids(legacy, anon_legacy, extra["refund_transfers"], "transfers"))
     anon_path = out / f"anonymized-{stamp}.json"
     rf.write_reference(anon, anon_path)
     rf.assert_no_text_leak(legacy, anon_path.read_text(encoding="utf-8"))
@@ -297,6 +297,28 @@ def cmd_fixtures_synthetic(args) -> int:
     print(f"{args.seeds} ficheros sintéticos en {out}")
     return 0
 
+
+def _split(v) -> list:
+    return [x.strip() for x in (v or "").split(",") if x.strip()]
+
+
+def _latest_backup(args) -> Path:
+    backups = sorted(Path(args.backup_dir).glob("backup-*.json"))
+    path = Path(args.backup) if getattr(args, "backup", None) else (backups[-1] if backups else None)
+    if not path:
+        raise SystemExit(f"No hay backups en {args.backup_dir}. Ejecuta antes 'backup' o 'inventory'.")
+    return path
+
+
+def cmd_own_expenses(args) -> int:
+    from .own_expenses import own_expenses_report, print_report
+    legacy, meta = read_backup(_latest_backup(args))
+    print(f"Backup: {meta['file']}\n")
+    print_report(own_expenses_report(legacy, args.current_month or current_month_madrid()))
+    print("Decide:\n  1) el primer mes en que los reembolsos se hacen DENTRO de la app (antes se dan por saldados):"
+          "  --own-expenses-from AAAA-MM\n  2) desde ese mes, qué 'otras transferencias' fueron reembolsos:"
+          "  --refund-transfers id1,id2,…  (los 8 caracteres entre corchetes)")
+    return 0
 
 # --------------------------------------------------------------------------- argparse
 
@@ -333,6 +355,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--prune", action="store_true")
     sp.add_argument("--overwrite-edited", action="store_true")
     sp.add_argument("--engine-path", help="Ruta a un clon del repo Salary viejo para comparar cálculos")
+    sp.add_argument("--own-expenses-from", help="Mes desde el que los reembolsos de gastos propios se hacen en la app")
+    sp.add_argument("--refund-transfers", help="Ids (o prefijos de 8) de transferencias que fueron reembolsos, separados por comas")
     sp.add_argument("--current-month", help="Mes actual para la verificación (por defecto, hoy en Madrid)")
     sp.set_defaults(func=cmd_migrate)
 
@@ -357,7 +381,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--current-from", help="Primer mes 'actual' (por defecto, el primer mes con datos)")
     sp.add_argument("--current-to", help="Último mes 'actual' (por defecto, hoy en Madrid)")
     sp.add_argument("--out", default=str(WORKDIR / "reference"))
+    sp.add_argument("--own-expenses-from")
+    sp.add_argument("--refund-transfers")
     sp.set_defaults(func=cmd_reference)
+
+    sp = sub.add_parser("own-expenses", help="Listado de gastos propios y posibles reembolsos (decisión D3)")
+    common(sp)
+    sp.add_argument("--backup", help="Backup a usar (por defecto, el más reciente)")
+    sp.add_argument("--current-month")
+    sp.set_defaults(func=cmd_own_expenses)
 
     sp = sub.add_parser("fixtures-synthetic", help="Fase 3: ficheros de referencia sintéticos para el repo")
     sp.add_argument("--engine-path", required=True)

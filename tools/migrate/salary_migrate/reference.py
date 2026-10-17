@@ -48,12 +48,13 @@ def _clean_doc(doc: dict) -> dict:
     return out
 
 
-def dataset_from_legacy(legacy: dict, start_month: str) -> tuple[dict, list]:
-    plan = transform(legacy, "reference", start_month)
+def dataset_from_legacy(legacy: dict, start_month: str, **kw) -> tuple[dict, list]:
+    plan = transform(legacy, "reference", start_month, **kw)
     if not plan.ok:
         raise ValueError(f"Datos no migrables: {plan.errors[:3]}")
     docs = {c: {i: _clean_doc(d) for i, d in sorted(v.items())} for c, v in plan.docs.items()}
-    profile = {"settings": {k: plan.profile["settings"][k] for k in ("startMonth", "mainAccountId")}}
+    profile = {"settings": {k: plan.profile["settings"][k] for k in ("startMonth", "mainAccountId", "ownExpensesFrom")
+                            if k in plan.profile["settings"]}}
     return {"profile": profile, "docs": docs}, plan.warnings
 
 
@@ -124,8 +125,10 @@ def coverage(legacy: dict, cases: list) -> dict:
 
 
 def make_reference(FinanceCore, legacy: dict, kind: str, start_month: str, current_months: list,
-                   source: dict | None = None) -> dict:
-    dataset, warnings = dataset_from_legacy(legacy, start_month)
+                   source: dict | None = None, own_expenses_from: str | None = None,
+                   refund_transfers: list | None = None) -> dict:
+    dataset, warnings = dataset_from_legacy(legacy, start_month, own_expenses_from=own_expenses_from,
+                                            refund_transfers=refund_transfers or [])
     cases = build_cases(FinanceCore, legacy, dataset, start_month, current_months)
     return {
         "format": FORMAT,
@@ -275,3 +278,15 @@ def assert_no_text_leak(original: dict, anon_json: str):
                     leaks.add(v)
     if leaks:
         raise AssertionError(f"La anonimización deja pasar {len(leaks)} texto(s) del original.")
+
+
+def map_ids(original: dict, anonymized: dict, ids: list, coll: str) -> list:
+    """Traduce ids (o prefijos) del original a los ids de la copia anonimizada (mismo orden)."""
+    orig = sorted(d["id"] for d in original.get(coll, []))
+    anon = sorted(d["id"] for d in anonymized.get(coll, []))
+    out = []
+    for w in ids:
+        hits = [i for i, o in enumerate(orig) if o == w or (len(w) >= 6 and o.startswith(w))]
+        if len(hits) == 1:
+            out.append(anon[hits[0]])
+    return out

@@ -8,6 +8,8 @@ import type { IsoDate, Month } from "./months";
 export interface Settings {
   startMonth: Month;           // mismo significado que min_managed_month de la app vieja
   mainAccountId: string | null;
+  /** D3: mes desde el que los reembolsos de gastos propios se controlan en la app (antes, saldados fuera). */
+  ownExpensesFrom?: Month;
 }
 
 export interface AccountDoc { name?: string; initialBalance: number; archived?: boolean }

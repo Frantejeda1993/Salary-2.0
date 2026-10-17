@@ -108,6 +108,33 @@ describe("D3 + A1 · gastos propios", () => {
   });
 });
 
+describe("D3 · histórico y saldo proyectado", () => {
+  const w = () => {
+    const x = world();
+    x.fixed_expenses = [{ id: "gym", account_id: "sec", monto: 50, es_propio: true, fecha_inicio: d(2026, 2, 1), fecha_fin: null }];
+    x.fixed_expense_instances = ["2026-02", "2026-03"].map((m) => ({ fixed_expense_id: "gym", mes: m, estado: "pagado", monto: null }));
+    return x;
+  };
+
+  it("antes de ownExpensesFrom los reembolsos se hicieron fuera de la app: no se deben", () => {
+    const e = toEngine(w());
+    e.settings = { ownExpensesFrom: "2026-03" };
+    expect([...new FinanceCore(e, "2026-04", "2026-02", EUROS).ownExpensesPending("2026-04", MAIN)]).toEqual([["sec", 100]]);
+    e.settings = { ownExpensesFrom: "2026-04" };
+    expect([...new FinanceCore(e, "2026-04", "2026-02", EUROS).ownExpensesPending("2026-04", MAIN)]).toEqual([["sec", 50]]);
+  });
+
+  it("el saldo proyectado cuenta el reembolso: −pendiente en la principal, + en la cuenta del gasto", () => {
+    const now = fixed(w(), "2026-04");
+    const old = new FinanceCore(toEngine(w()), "2026-04", "2026-02", { ...EUROS, fixD3: false });
+    // mes actual: todo lo pendiente (50 + 50 + 50)
+    expect(now.projectedBalance(MAIN, "2026-04").resultado - old.projectedBalance(MAIN, "2026-04").resultado).toBe(-150);
+    expect(now.projectedBalance("sec", "2026-04").resultado - old.projectedBalance("sec", "2026-04").resultado).toBe(150);
+    // la cuenta secundaria ya no baja cada mes: el gasto propio y su reembolso se compensan
+    expect(now.projectedBalance("sec", "2026-06").resultado).toBe(now.projectedBalance("sec", "2026-05").resultado);
+  });
+});
+
 describe("B3 · budgets con cambio de importe a partir de un mes", () => {
   it("cada mes usa el importe vigente", () => {
     const data = world();
@@ -193,10 +220,12 @@ describe("motor corregido sobre los 12 ficheros sintéticos", () => {
           if (m >= c.currentMonth && m < c.months[1]) {
             expect(core.remainingFromPreviousMonth(addMonths(m, 1), main)).toBe(s.resultado_proyectado);
           }
-          // B1: el saldo proyectado futuro se construye mes a mes desde el anterior.
+          // B1: el saldo proyectado futuro se construye mes a mes desde el anterior,
+          // con el reembolso previsto de los gastos propios de ese mes (sale de la principal).
           if (m > c.currentMonth) {
             const prev = core.projectedBalance(main, addMonths(m, -1)).resultado;
-            expect(core.projectedBalance(main, m).resultado).toBe(core.monthProjectedResult(main, m, prev).resultado);
+            const refunds = [...core.ownExpensesPending(m, main).values()].reduce((x, y) => x + y, 0);
+            expect(core.projectedBalance(main, m).resultado).toBe(core.monthProjectedResult(main, m, prev).resultado - refunds);
           }
         }
       });
