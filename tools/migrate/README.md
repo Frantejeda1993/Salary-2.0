@@ -75,6 +75,33 @@ El script usa la clave de administrador, que no pasa por las reglas.
 
 ### 1.6 Código y entorno
 
+> **Windows:** instala primero Git y Python (PowerShell, una sola vez) y **cierra y vuelve a abrir PowerShell**:
+>
+> ```powershell
+> winget install --id Git.Git -e
+> winget install --id Python.Python.3.12 -e
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # permite activar el entorno virtual
+> ```
+>
+> Trabaja en una carpeta de proyectos, **nunca dentro de `.salary-keys`**:
+>
+> ```powershell
+> mkdir $HOME\proyectos; cd $HOME\proyectos
+> git clone https://github.com/Frantejeda1993/Salary-2.0.git
+> git clone https://github.com/Frantejeda1993/Salary.git salary-legacy
+> cd Salary-2.0\tools\migrate
+> py -3.12 -m venv .venv
+> .venv\Scripts\Activate.ps1
+> pip install -r requirements.txt
+> $env:SALARY_LEGACY_PATH = "$HOME\proyectos\salary-legacy"
+> python -m pytest -q
+> ```
+>
+> En los comandos de las secciones siguientes, en PowerShell sustituye `\` al final de
+> línea por `` ` `` (acento grave) y usa `--engine-path $HOME\proyectos\salary-legacy`.
+
+macOS / Linux:
+
 ```bash
 git clone https://github.com/Frantejeda1993/Salary-2.0.git
 git clone https://github.com/Frantejeda1993/Salary.git salary-legacy   # solo para leer su motor de cálculo
