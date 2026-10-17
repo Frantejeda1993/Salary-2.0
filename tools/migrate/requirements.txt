@@ -1,0 +1,5 @@
+# Mismas versiones que la app vieja para leer Firestore y ejecutar su motor.
+google-cloud-firestore==2.34.0
+python-dateutil==2.9.0.post0
+tzdata  # zona horaria Europe/Madrid también en Windows
+pytest==8.*

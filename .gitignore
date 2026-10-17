@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------- SECRETOS
+# Claves de service account: nunca en el repo. Guárdalas en ~/.salary-keys/
+*-firebase-adminsdk-*.json
+*service-account*.json
+*serviceAccount*.json
+*.key.json
+.salary-keys/
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------- DATOS REALES
+# Backups e informes de la migración (por defecto viven en ~/salary-migration/,
+# esto es una segunda red de seguridad por si se generan dentro del repo).
+backups/
+reports/
+backup-*.json
+backup-*.json.sha256
+salary-migration/
+reference-values/
+
+# ---------------------------------------------------------------- Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# ---------------------------------------------------------------- Node / Vite (Fase 5)
+node_modules/
+dist/
+dev-dist/
+.firebase/
+*.log
+.DS_Store
