@@ -5,7 +5,7 @@ Igualdad exacta (==), no solo al céntimo.
 """
 import pytest
 
-from datasets import dataset
+from salary_migrate.synthetic import dataset
 from salary_migrate.reverse import to_legacy
 from salary_migrate.transform import transform
 from salary_migrate.verify import _months, compare_metrics, engine_metrics

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from datasets import dataset
+from salary_migrate.synthetic import dataset
 from fakefs import FakeClient, legacy_to_docs
 from salary_migrate import cli
 from salary_migrate.source import read_backup

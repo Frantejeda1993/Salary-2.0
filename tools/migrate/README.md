@@ -213,6 +213,25 @@ Mismo comando con tu **uid real** (lo mostrará la app nueva en tu perfil tras
 el primer login con Google) y `--prune`, para que el destino sea un espejo exacto
 del origen. Antes, deja de usar la app vieja para que no entren datos durante la copia.
 
+## 5. Valores de referencia (Fase 3)
+
+Ejecuta el motor de la app vieja sobre tu último backup y guarda todas sus
+cifras, para cada "mes actual" desde tu primer mes con datos hasta hoy. Genera dos
+ficheros en `~/salary-migration/reference/`, **fuera del repo**:
+
+- `real-….json`: tus datos y sus cifras, para validar el motor nuevo en la Fase 4.
+- `anonymized-….json`: la misma estructura sin textos, con ids nuevos, días
+  aleatorios dentro de cada mes e importes escalados por un factor aleatorio que no
+  se guarda. El script comprueba que no se cuela ningún nombre ni descripción.
+
+```powershell
+python -m salary_migrate reference --engine-path C:\dev\salary-legacy
+```
+
+Muestra un resumen de cobertura: cuántas compras con tarjeta, budgets superados,
+déficits absorbidos, arrastres, etc. contiene cada fichero. Envíame ese resumen,
+no los ficheros. El formato está descrito en [`fixtures/reference/README.md`](../../fixtures/reference/README.md).
+
 ## Opciones
 
 | Opción | Para qué |

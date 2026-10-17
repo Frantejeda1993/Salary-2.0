@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from datasets import dataset, ts
+from salary_migrate.synthetic import dataset, ts
 from salary_migrate.transform import card_id_for, settlement_id, transform
 
 

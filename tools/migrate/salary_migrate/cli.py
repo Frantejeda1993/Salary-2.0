@@ -7,6 +7,8 @@ Migración Salary (Streamlit) -> Salary 2.0.
   python -m salary_migrate migrate   --source-key ... --target-key ... --uid UID --min-month 2026-02
   python -m salary_migrate verify    --target-key ... --uid UID --backup backups/backup-....json
   python -m salary_migrate wipe      --target-key ... --uid UID --confirm UID
+  python -m salary_migrate reference --engine-path ../salary-legacy
+  python -m salary_migrate fixtures-synthetic --engine-path ../salary-legacy --out ../../fixtures/reference
 
 Códigos de salida: 0 ok, 1 verificación fallida, 2 datos no migrables, 3 uso incorrecto.
 """
@@ -227,6 +229,75 @@ def cmd_wipe(args) -> int:
     return 0
 
 
+def _engine_source(engine_path: str) -> dict:
+    import subprocess
+    try:
+        sha = subprocess.run(["git", "-C", engine_path, "rev-parse", "HEAD"], capture_output=True,
+                             text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        sha = ""
+    return {"engineRepo": "Frantejeda1993/Salary", "engineCommit": sha or None}
+
+
+def _print_coverage(label: str, ref: dict):
+    cov = ref["coverage"]
+    print(f"\n{label}: {cov['cases']} casos, {cov['metrics']} cifras")
+    print("   datos:     " + ", ".join(f"{k}={v}" for k, v in cov["data"].items()))
+    print("   escenarios:" + ("".join(f" {k}={v}" for k, v in cov["per_case_totals"].items()) or " ninguno"))
+
+
+def cmd_reference(args) -> int:
+    from . import reference as rf
+    from .verify import load_engine
+    _check_month(args.start_month, "--start-month")
+    backups = sorted(Path(args.backup_dir).glob("backup-*.json"))
+    path = Path(args.backup) if args.backup else (backups[-1] if backups else None)
+    if not path:
+        raise SystemExit(f"No hay backups en {args.backup_dir}. Ejecuta antes 'backup' o 'inventory'.")
+    legacy, meta = read_backup(path)
+    print(f"Backup: {meta['file']} (sha256 {meta['sha256'][:12]}…)")
+    FinanceCore = load_engine(args.engine_path)
+    first = FinanceCore(legacy, args.start_month, args.start_month).first_data_month() or args.start_month
+    currents = rf.months_between(args.current_from or first, args.current_to or current_month_madrid())
+    print(f"Meses actuales: {currents[0]} … {currents[-1]} ({len(currents)})")
+    src = {**_engine_source(args.engine_path), "backupSha256": meta["sha256"]}
+
+    out = Path(args.out)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    real = rf.make_reference(FinanceCore, legacy, "real", args.start_month, currents, src)
+    rf.write_reference(real, out / f"real-{stamp}.json")
+    _print_coverage("REAL (tus datos, no salen de tu ordenador)", real)
+
+    anon_legacy = rf.anonymize(legacy)
+    anon = rf.make_reference(FinanceCore, anon_legacy, "anonymized", args.start_month, currents,
+                             {"engineCommit": src["engineCommit"]})
+    anon_path = out / f"anonymized-{stamp}.json"
+    rf.write_reference(anon, anon_path)
+    rf.assert_no_text_leak(legacy, anon_path.read_text(encoding="utf-8"))
+    _print_coverage("ANONIMIZADO", anon)
+    print(f"\nFicheros en {out}:\n   real-{stamp}.json\n   anonymized-{stamp}.json")
+    return 0
+
+
+def cmd_fixtures_synthetic(args) -> int:
+    from . import reference as rf
+    from .synthetic import dataset
+    from .verify import load_engine
+    FinanceCore = load_engine(args.engine_path)
+    out = Path(args.out)
+    for f in out.glob("synthetic-*.json"):
+        f.unlink()
+    currents = ["2026-02", "2026-06", "2026-11"]
+    for seed in range(args.seeds):
+        ref = rf.make_reference(FinanceCore, dataset(seed), "synthetic", "2026-02",
+                                [currents[seed % 3], currents[(seed + 1) % 3]],
+                                {**_engine_source(args.engine_path), "seed": seed})
+        ref.pop("generatedAt")  # ficheros reproducibles: mismo contenido en cada ejecución
+        rf.write_reference(ref, out / f"synthetic-{seed:03d}.json")
+    print(f"{args.seeds} ficheros sintéticos en {out}")
+    return 0
+
+
 # --------------------------------------------------------------------------- argparse
 
 def build_parser() -> argparse.ArgumentParser:
@@ -277,6 +348,22 @@ def build_parser() -> argparse.ArgumentParser:
     common(sp, target=True)
     sp.add_argument("--confirm", required=True)
     sp.set_defaults(func=cmd_wipe)
+
+    sp = sub.add_parser("reference", help="Fase 3: valores de referencia con el motor viejo (real + anonimizado)")
+    common(sp)
+    sp.add_argument("--engine-path", required=True)
+    sp.add_argument("--backup", help="Backup a usar (por defecto, el más reciente)")
+    sp.add_argument("--start-month", default="2026-02", help="min_managed_month de la app vieja")
+    sp.add_argument("--current-from", help="Primer mes 'actual' (por defecto, el primer mes con datos)")
+    sp.add_argument("--current-to", help="Último mes 'actual' (por defecto, hoy en Madrid)")
+    sp.add_argument("--out", default=str(WORKDIR / "reference"))
+    sp.set_defaults(func=cmd_reference)
+
+    sp = sub.add_parser("fixtures-synthetic", help="Fase 3: ficheros de referencia sintéticos para el repo")
+    sp.add_argument("--engine-path", required=True)
+    sp.add_argument("--out", required=True)
+    sp.add_argument("--seeds", type=int, default=12)
+    sp.set_defaults(func=cmd_fixtures_synthetic)
     return p
 
 
