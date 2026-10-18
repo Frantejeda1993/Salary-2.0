@@ -24,12 +24,17 @@ export default function App() {
   return <UIProvider><Shell /></UIProvider>;
 }
 
+const screenOf = (path: string) =>
+  path.startsWith("/movimientos") ? "movimientos" : path.startsWith("/plan") ? "plan" : path.startsWith("/ajustes") ? "ajustes" : "mes";
+
 function Shell() {
   const { quickAdd, openQuickAdd } = useUI();
   const proxy = useRef<HTMLInputElement>(null);
+  const loc = useLocation();
   return (
     <div className="app">
       <main className="content">
+        <div className={`screen s-${screenOf(loc.pathname)}`} key={loc.pathname}>
         <Routes>
           <Route path="/" element={<MonthPage />} />
           <Route path="/movimientos" element={<Movements />} />
@@ -38,6 +43,7 @@ function Shell() {
           <Route path="/nuevo" element={<FromShortcut />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
       </main>
       {/* iOS solo abre el teclado si el foco llega dentro del toque: se enfoca este campo
           invisible al pulsar «+» y la hoja le pasa el foco al importe. */}

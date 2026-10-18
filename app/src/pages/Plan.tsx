@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { budgetAmountForMonth, fixedAccountForMonth, fixedAmountForMonth, fixedIsOwnForMonth, type Month } from "@salary/engine";
 import { BudgetEditor, CardEditor, FixedEditor, SalaryEditor } from "../components/PlanEditors";
+import ScreenHeader from "../components/ScreenHeader";
 import { useData } from "../data";
 import { monthLong, nameOf } from "../lib/format";
 import { formatCents } from "../lib/money";
@@ -35,7 +36,7 @@ export default function Plan() {
 
   return (
     <div className="page">
-      <h1 className="title-lg">Plan</h1>
+      <ScreenHeader id="plan" />
       <p className="muted">Lo que se repite cada mes. Los importes son los de {monthLong(m)}; los cambios se aplican desde el mes que elijas.</p>
 
       <Head title="Nómina" onAdd={open("salary", null)} />

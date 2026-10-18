@@ -4,9 +4,10 @@ import { useAuth } from "../auth";
 import { useData } from "../data";
 import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
+import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
-import { monthLong, nameOf, sortedLive } from "../lib/format";
+import { groupByBank, monthLong, nameOf, sortedLive } from "../lib/format";
 import { formatCents, formatEuros, parseAmount } from "../lib/money";
 import { useUI } from "../ui";
 
@@ -41,20 +42,25 @@ export default function Settings() {
 
   return (
     <div className="page">
-      <h1 className="title-lg">Ajustes</h1>
+      <ScreenHeader id="ajustes" />
 
       <div className="section-head"><h2 className="title-sm">Cuentas</h2><button className="link" onClick={() => setEditing({ kind: "account", id: null })}>Añadir</button></div>
+      {groupByBank(accounts).map(({ bank, accounts: list }) => (
+      <section className="bank" key={bank} aria-label={bank}>
+      <div className="bank-head"><span>{bank}</span></div>
       <ul className="rows">
-        {accounts.map(([id, a]) => (
+        {list.map(([id, a]) => (
           <li key={id} className={a.archived ? "archived" : ""}>
             <button className="what plain" onClick={() => setEditing({ kind: "account", id })}>
               <b>{a.name as string}{id === mainAccountId && <em className="badge">principal</em>}{a.archived ? " (archivada)" : ""}</b>
-              <small>{(a.bankName as string) || "Sin banco"}, saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}</small>
+              <small>Saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}</small>
             </button>
             <span className="amt">{formatCents(core.realBalance(id, currentMonth))}<small>hoy</small></span>
           </li>
         ))}
       </ul>
+      </section>
+      ))}
       <div className="row-actions">
         <button className="link" onClick={() => setEditing({ kind: "main", id: null })}>Cambiar la cuenta principal</button>
         {archivedCount > 0 && <button className="link" onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Ocultar archivadas" : `Ver archivadas (${archivedCount})`}</button>}

@@ -21,6 +21,8 @@
   --action-ink: #ffffff;
   --free: #0e7c66;
   --committed: #7d8aa1;
+  --lvl-ok: #0e7c66; --lvl-mid: #a16207; --lvl-high: #c2410c; --lvl-over: #b91c1c;
+  --tint-mes: #2b59c3; --tint-movimientos: #0f766e; --tint-plan: #6d28d9; --tint-ajustes: #475569;
   --field-border: #8794aa;
   --scrim: rgba(13, 19, 34, .45);
   --focus: #2b59c3;
@@ -43,6 +45,8 @@
     --action-ink: #0d1322;
     --free: #43c9a3;
     --committed: #5e6d8a;
+    --lvl-ok: #43c9a3; --lvl-mid: #f5c451; --lvl-high: #ff9a5c; --lvl-over: #ff6b6b;
+    --tint-mes: #7ea5ff; --tint-movimientos: #2dd4bf; --tint-plan: #b79cff; --tint-ajustes: #a3b1c6;
     --field-border: #5e6d8a;
     --scrim: rgba(0, 0, 0, .6);
     --focus: #7ea5ff;
@@ -215,7 +219,12 @@ em { font-style: normal; color: var(--ink-2); font-weight: 400; }
 .budget .top b { font-weight: 500; }
 .budget .meter { position: relative; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--field-border) 40%, var(--sheet)); margin: 8px 0 6px; overflow: hidden; }
 .budget .meter i { position: absolute; inset: 0 auto 0 0; background: var(--in); border-radius: 4px; }
-.budget .meter i.hot { background: var(--out); }
+/* El color cuenta cuánto se ha llenado; el texto de debajo lo dice con palabras. */
+.budget .meter i { transition: width .3s ease-out, background-color .3s ease-out; }
+.budget .meter i.lvl-ok { background: var(--lvl-ok); }
+.budget .meter i.lvl-mid { background: var(--lvl-mid); }
+.budget .meter i.lvl-high { background: var(--lvl-high); }
+.budget .meter i.lvl-over { background: var(--lvl-over); }
 .budget .meter u { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .45; }
 .budget p { margin: 0; font-size: 13px; color: var(--ink-2); }
 
@@ -296,3 +305,32 @@ details.edit-section .btn + .btn { margin-top: 8px; }
 .mini-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }
 .rows li.archived { opacity: .65; }
 .row-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 4px; }
+
+/* ---- Identidad de cada pantalla: cabecera con su color, transición al cambiar y pestaña activa marcada. */
+.screen { --tint: var(--tint-mes); animation: screen-in .2s ease-out; }
+.screen.s-movimientos { --tint: var(--tint-movimientos); }
+.screen.s-plan { --tint: var(--tint-plan); }
+.screen.s-ajustes { --tint: var(--tint-ajustes); }
+@keyframes screen-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.screen-head { display: flex; align-items: center; gap: 12px; padding: 6px 0 10px; margin-bottom: 6px; border-bottom: 2px solid color-mix(in srgb, var(--tint) 35%, transparent); }
+.screen-head h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.screen-chip { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--tint);
+  background: color-mix(in srgb, var(--tint) 14%, var(--sheet)); }
+.screen-chip svg { width: 22px; height: 22px; }
+.screen-head-extra { margin-left: auto; }
+.month-switch.compact { margin-top: 0; }
+.month-switch.compact h2 { font-size: 16px; font-weight: 600; margin: 0; text-align: center; }
+.month-switch.compact h2::first-letter { text-transform: uppercase; }
+.month-switch.compact small { display: block; font-size: 12px; color: var(--ink-2); font-weight: 400; }
+.tabbar a.t-mes { --tint: var(--tint-mes); }
+.tabbar a.t-movimientos { --tint: var(--tint-movimientos); }
+.tabbar a.t-plan { --tint: var(--tint-plan); }
+.tabbar a.t-ajustes { --tint: var(--tint-ajustes); }
+.tabbar a svg { padding: 3px 14px; width: 52px; height: 30px; border-radius: 15px; box-sizing: border-box; transition: background-color .15s ease-out; }
+.tabbar a.active svg { color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.tabbar a.active { font-weight: 600; }
+
+/* ---- Cuentas agrupadas por banco */
+.bank + .bank { margin-top: 12px; }
+.bank-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); font-weight: 500; margin: 0 4px 6px; }
+.bank-head .neg { color: var(--out); }

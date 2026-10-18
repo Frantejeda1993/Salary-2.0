@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { addMonths, monthOf, type Month } from "@salary/engine";
 import { IconNext, IconPrev } from "../components/Icons";
+import ScreenHeader from "../components/ScreenHeader";
 import { useData } from "../data";
 import { dayLong, monthLong, monthName, nameOf } from "../lib/format";
 import { formatEuros } from "../lib/money";
@@ -44,9 +45,10 @@ export default function Movements() {
 
   return (
     <div className="page">
-      <div className="month-switch">
+      <ScreenHeader id="movimientos" />
+      <div className="month-switch compact">
         <button onClick={() => setMonth(addMonths(month, -1))} aria-label="Mes anterior"><IconPrev /></button>
-        <h1>{monthLong(month)}<small>{items.length} movimientos, {formatEuros(spent / 100)} en gastos</small></h1>
+        <h2>{monthLong(month)}<small>{items.length} movimientos, {formatEuros(spent / 100)} en gastos</small></h2>
         <button onClick={() => setMonth(addMonths(month, 1))} disabled={month >= addMonths(currentMonth, 12)} aria-label="Mes siguiente"><IconNext /></button>
       </div>
       <input className="input search" type="search" placeholder="Buscar por comercio o concepto" value={q} onChange={(e) => setQ(e.target.value)} />

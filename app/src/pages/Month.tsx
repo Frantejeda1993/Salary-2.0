@@ -6,13 +6,14 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, type Month } from "@salary/engine";
 import AmountSheet from "../components/AmountSheet";
+import ScreenHeader from "../components/ScreenHeader";
 import { IconNext, IconPrev } from "../components/Icons";
 import { useAuth } from "../auth";
 import { useData } from "../data";
 import {
   refundOwnExpenses, repayLoan, setFixedPayment, settleCard, toEuros, unsettleCard, deleteMovement, type Undo,
 } from "../lib/actions";
-import { daysInMonth, monthLong, monthName, monthShort, nameOf, sortedLive } from "../lib/format";
+import { budgetLevel, daysInMonth, groupByBank, monthLong, monthName, monthShort, nameOf, sortedLive } from "../lib/format";
 import { formatCents } from "../lib/money";
 import { todayIn } from "../lib/quickadd";
 import { useUI } from "../ui";
@@ -152,6 +153,7 @@ export default function MonthPage() {
 
   return (
     <div className="page month">
+      <ScreenHeader id="mes" />
       <div className="month-switch">
         <button onClick={() => go(addMonths(month, -1))} disabled={month <= startMonth} aria-label="Mes anterior"><IconPrev /></button>
         <h1>{monthLong(month)}<small>{phase === "current" ? "Este mes" : phase === "past" ? "Mes cerrado" : "Previsión"}</small></h1>
@@ -260,19 +262,28 @@ export default function MonthPage() {
       <Budgets month={month} phase={phase} carry={s.remaining_from_previous_month} today={today} />
 
       <h2 className="title-sm">Cuentas</h2>
-      <ul className="rows">
-        {sortedLive(docs.accounts).map(([id, a]) => {
-          const pb = core.projectedBalance(id, month).resultado;
-          const card = core.creditOutstanding(id, month, false);
-          return (
-            <li key={id}>
-              <span className="what"><b>{a.name as string}{id === main && <em className="badge">principal</em>}</b>
-                <small>{phase === "future" ? "Al cierre del mes" : `${phase === "current" ? "Hoy" : "Al cierre"} ${formatCents(core.realBalance(id, month))}`}{card ? `, tarjeta ${formatCents(-card)}` : ""}</small></span>
-              <span className={`amt ${pb < 0 ? "neg" : ""}`}>{formatCents(pb)}<small>previsto</small></span>
-            </li>
-          );
-        })}
-      </ul>
+      {groupByBank(sortedLive(docs.accounts)).map(({ bank, accounts }) => {
+        const pbs = accounts.map(([id]) => core.projectedBalance(id, month).resultado);
+        const total = pbs.reduce((x, y) => x + y, 0);
+        return (
+          <section className="bank" key={bank} aria-label={bank}>
+            <div className="bank-head"><span>{bank}</span>{accounts.length > 1 && <span className={total < 0 ? "neg" : ""}>{formatCents(total)}</span>}</div>
+            <ul className="rows">
+              {accounts.map(([id, a], i) => {
+                const pb = pbs[i];
+                const card = core.creditOutstanding(id, month, false);
+                return (
+                  <li key={id}>
+                    <span className="what"><b>{a.name as string}{id === main && <em className="badge">principal</em>}</b>
+                      <small>{phase === "future" ? "Al cierre del mes" : `${phase === "current" ? "Hoy" : "Al cierre"} ${formatCents(core.realBalance(id, month))}`}{card ? `, tarjeta ${formatCents(-card)}` : ""}</small></span>
+                    <span className={`amt ${pb < 0 ? "neg" : ""}`}>{formatCents(pb)}<small>previsto</small></span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
 
       <Trend month={month} />
 
@@ -307,7 +318,7 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
         let text: string;
         if (over) text = `Te has pasado ${formatCents(used - limit)}.`;
         else if (phase === "future") text = `Previsto ${formatCents(limit)}.`;
-        else if (pace && used > 0) text = `Quedan ${formatCents(limit - used)}. A este ritmo acabarás en ${formatCents(Math.round(pace.forecast))}.`;
+        else if (pace && used > 0) text = `Quedan ${formatCents(limit - used)}. A este ritmo acabarás en ${formatCents(Math.round(pace.forecast))}${pace.status === "por encima del ritmo" ? ", por encima del budget" : ""}.`;
         else if (pace) text = `Quedan ${formatCents(limit - used)}.`;
         else text = `Quedaron ${formatCents(limit - used)} sin gastar.`;
         return (
@@ -315,7 +326,7 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
             <div className="top"><b>{cat}{b.accountId !== mainAccountId && <em> en {nameOf(docs.accounts, b.accountId)}</em>}</b>
               <span>{formatCents(used)} <em>de {formatCents(limit)}</em></span></div>
             <div className="meter">
-              <i className={over || pace?.status === "por encima del ritmo" ? "hot" : ""} style={{ width: `${pct * 100}%` }} />
+              <i className={`lvl-${budgetLevel(Math.max(0, used), limit)}`} style={{ width: `${pct * 100}%` }} />
               {pace && <u style={{ left: `${pace.elapsed * 100}%` }} title="Hoy" />}
             </div>
             <p>{text}{absorbed > 0 ? ` ${formatCents(absorbed)} de lo que queda cubre el déficit del mes.` : ""}</p>
@@ -394,6 +405,7 @@ function HistoryMonth({ month, first, last, go }: { month: Month; first: Month; 
   const spent = [...byCat.values()].reduce((a, b) => a + b, 0);
   return (
     <div className="page month">
+      <ScreenHeader id="mes" />
       <div className="month-switch">
         <button onClick={() => go(addMonths(month, -1))} disabled={month <= first} aria-label="Mes anterior"><IconPrev /></button>
         <h1>{monthLong(month)}<small>Antes de la app, desde tu Excel</small></h1>

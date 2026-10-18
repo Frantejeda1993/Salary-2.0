@@ -28,3 +28,24 @@ export const nameOf = (col: Record<string, Raw>, id: string | null | undefined, 
 
 /** Días del mes y día de hoy, para el ritmo de los budgets. */
 export const daysInMonth = (m: Month) => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
+
+/** Cuentas agrupadas por banco (en el orden de la primera cuenta de cada banco). */
+export function groupByBank(accounts: [string, Raw][]): { bank: string; accounts: [string, Raw][] }[] {
+  const groups = new Map<string, [string, Raw][]>();
+  for (const entry of accounts) {
+    const bank = String(entry[1].bankName ?? "").trim() || "Sin banco";
+    if (!groups.has(bank)) groups.set(bank, []);
+    groups.get(bank)!.push(entry);
+  }
+  return [...groups].map(([bank, list]) => ({ bank, accounts: list }));
+}
+
+/**
+ * Nivel de llenado de un budget, para el color de la barra:
+ * verde hasta el 60 %, ámbar hasta el 85 %, naranja hasta el 100 % y rojo si se pasa.
+ */
+export function budgetLevel(used: number, limit: number): "ok" | "mid" | "high" | "over" {
+  if (limit <= 0) return used > 0 ? "over" : "ok";
+  const r = used / limit;
+  return r > 1 ? "over" : r >= 0.85 ? "high" : r >= 0.6 ? "mid" : "ok";
+}
