@@ -30,7 +30,7 @@ function Copy({ text, label }: { text: string; label: string }) {
  * Atajo genérico compartido por iCloud. Vacío: la guía explica cómo crearlo. Debe mandar
  * #/nuevo?wallet=<tarjeta>&importe=<importe>&comercio=<comercio> (cada valor codificado).
  */
-export const SHARED_SHORTCUT_URL = "";
+export const SHARED_SHORTCUT_URL = "https://www.icloud.com/shortcuts/da02a87ff6624541b3539918bce7a168";
 
 export default function ShortcutGuide() {
   const { docs } = useData();
@@ -59,7 +59,7 @@ export default function ShortcutGuide() {
       <h4 className="guide-h">Una automatización para todas tus tarjetas</h4>
       <ol className="guide-steps">
         {SHARED_SHORTCUT_URL ? (
-          <li>Instala el atajo <a href={SHARED_SHORTCUT_URL} target="_blank" rel="noreferrer"><b>Salary: apuntar pago</b></a> y pulsa «Añadir atajo».</li>
+          <li><a href={SHARED_SHORTCUT_URL} target="_blank" rel="noreferrer"><b>Instala el atajo de Salary</b></a> y pulsa «Añadir atajo».</li>
         ) : (
           <li>Crea un atajo llamado <b>Salary: apuntar pago</b> que reciba la transacción y tenga:
             <b> Codificar URL</b> de la Tarjeta, del Importe y del Comercio; un <b>Texto</b> que empiece por
@@ -69,7 +69,7 @@ export default function ShortcutGuide() {
         )}
         <li>En Atajos, pestaña <b>Automatización</b>, toca <b>+</b> y elige <b>Transacción</b> (puede estar dentro de Wallet).</li>
         <li>Marca <b>todas</b> tus tarjetas y elige <b>Ejecutar inmediatamente</b>.</li>
-        <li>Como acción, <b>Ejecutar atajo</b> → «Salary: apuntar pago», con la <b>Entrada del atajo</b> como entrada.</li>
+        <li>Como acción, <b>Ejecutar atajo</b> → el atajo de Salary que instalaste, con la <b>Entrada del atajo</b> como entrada.</li>
       </ol>
       <p className="muted small">La primera vez que pagues con cada tarjeta, la app te pedirá con qué pagaste y lo recordará. Lo aprendido se ve (y se olvida) en cada cuenta y tarjeta, en Ajustes.</p>
       <a className="btn wide" href={test}>Probar con 1,00 € (no guarda nada)</a>
