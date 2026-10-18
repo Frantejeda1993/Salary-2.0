@@ -314,3 +314,14 @@ describe("C no cambia nada con una tarjeta por cuenta (tus datos)", () => {
     });
   }
 });
+
+
+it("las deducciones una a una suman las del desglose", () => {
+  const data = world();
+  data.salaries[0].deductions = [{ name: "SS", percentage: 0.0635, applies_to_extras: true }, { name: "IRPF", percentage: 0.1308, applies_to_extras: true }];
+  const core = cents(data, "2026-04");
+  const lines = core.salaryDeductionLines("s1", "2026-04");
+  expect(lines.map((l) => l.name)).toEqual(["SS", "IRPF"]);
+  expect(lines.reduce((a, l) => a + l.amount, 0)).toBe(core.salaryBreakdown("s1", "2026-04").deducciones);
+  expect(lines[0].amount).toBe(12700); // 2.000 € × 6,35 %
+});

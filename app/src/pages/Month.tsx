@@ -149,7 +149,12 @@ export default function MonthPage() {
 
   const hero = phase === "past"
     ? { label: `Cerraste ${monthName(month)} con`, value: real }
-    : { label: phase === "current" ? "Cierre previsto" : `Cierre previsto de ${monthName(month)}`, value: proj };
+    : phase === "current"
+      ? { label: "Real hoy", value: real }
+      : { label: `Cierre previsto de ${monthName(month)}`, value: proj };
+  const hasLoans = impact.debes !== 0 || impact.te_deben !== 0;
+  const loanDetail = [impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : ""]
+    .filter(Boolean).join(", ");
 
   return (
     <div className="page month">
@@ -175,11 +180,7 @@ export default function MonthPage() {
               <span><i style={{ background: proj < 0 ? "var(--out)" : "var(--committed)" }} />Comprometido <b>{formatCents(committed)}</b></span>
             </div>
           </>
-        ) : <p className="muted small">Resultado real hasta hoy: {formatCents(real)}.</p>)}
-        {phase !== "past" && (impact.debes !== 0 || impact.te_deben !== 0) && (
-          <p className="loans-line">Si se saldan los préstamos pendientes: <b>{formatCents(proj + impact.neto)}</b>{" "}
-            ({[impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : ""].filter(Boolean).join(" y ")})</p>
-        )}
+        ) : <p className="muted small">Cierre previsto: {formatCents(proj)}.</p>)}
         {phase !== "past" && (s.deuda_tarjeta_arrastrada ?? 0) > 0 && (
           <p className="muted small">Incluye {formatCents(s.deuda_tarjeta_arrastrada!)} de tarjeta de meses anteriores, aún sin saldar.</p>
         )}
@@ -194,7 +195,11 @@ export default function MonthPage() {
           <div><span>Nómina</span><strong>{formatCents(s.ingreso_total)}</strong></div>
           <div><span>Fijos</span><strong>{formatCents(s.gastos_fijos)}</strong></div>
         </> : <>
-          <div><span>{phase === "current" ? "Real hoy" : "Real"}</span><strong>{formatCents(real)}</strong></div>
+          {phase === "current" && hasLoans
+            ? <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>
+            : phase === "current"
+              ? <div><span>Cierre previsto</span><strong>{formatCents(proj)}</strong></div>
+              : <div><span>Resultado del mes</span><strong>{formatCents(real - s.remaining_from_previous_month)}</strong></div>}
           <div><span>Arrastre</span><strong>{formatCents(s.remaining_from_previous_month)}</strong></div>
           <div><span>Por pagar</span><strong>{formatCents(pendingCents)}</strong></div>
         </>}
@@ -263,20 +268,30 @@ export default function MonthPage() {
 
       <h2 className="title-sm">Cuentas</h2>
       {groupByBank(sortedLive(docs.accounts)).map(({ bank, accounts }) => {
-        const pbs = accounts.map(([id]) => core.projectedBalance(id, month).resultado);
-        const total = pbs.reduce((x, y) => x + y, 0);
+        // Cifra principal: lo que hay hoy (en meses futuros, lo previsto al cierre).
+        const vals = accounts.map(([id]) => (phase === "future" ? core.projectedBalance(id, month).resultado : core.realBalance(id, month)));
+        const total = vals.reduce((x, y) => x + y, 0);
         return (
           <section className="bank" key={bank} aria-label={bank}>
             <div className="bank-head"><span>{bank}</span>{accounts.length > 1 && <span className={total < 0 ? "neg" : ""}>{formatCents(total)}</span>}</div>
             <ul className="rows">
               {accounts.map(([id, a], i) => {
-                const pb = pbs[i];
+                const v = vals[i];
+                const pb = core.projectedBalance(id, month).resultado;
                 const card = core.creditOutstanding(id, month, false);
+                const li = core.pendingLoansImpact(id);
+                const notes = [
+                  phase !== "future" ? `Previsto al cierre ${formatCents(pb)}` : "",
+                  card ? `tarjeta ${formatCents(-card)}` : "",
+                ].filter(Boolean).join(", ");
                 return (
                   <li key={id}>
                     <span className="what"><b>{a.name as string}{id === main && <em className="badge">principal</em>}</b>
-                      <small>{phase === "future" ? "Al cierre del mes" : `${phase === "current" ? "Hoy" : "Al cierre"} ${formatCents(core.realBalance(id, month))}`}{card ? `, tarjeta ${formatCents(-card)}` : ""}</small></span>
-                    <span className={`amt ${pb < 0 ? "neg" : ""}`}>{formatCents(pb)}<small>previsto</small></span>
+                      {notes && <small>{notes}</small>}
+                      {li.te_deben > 0 && <small className="loan-note">Prestado {formatCents(li.te_deben)}: con la devolución, {formatCents(v + li.te_deben)}</small>}
+                      {li.debes > 0 && <small className="loan-note">Debe {formatCents(li.debes)}: tras devolverlo, {formatCents(v - li.debes)}</small>}
+                    </span>
+                    <span className={`amt ${v < 0 ? "neg" : ""}`}>{formatCents(v)}<small>{phase === "current" ? "hoy" : phase === "past" ? "al cierre" : "previsto"}</small></span>
                   </li>
                 );
               })}

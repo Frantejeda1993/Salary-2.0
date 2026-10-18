@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { useData } from "../data";
 import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
+import { CardEditor } from "../components/PlanEditors";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -19,7 +20,7 @@ const ZONES: string[] = (Intl as unknown as { supportedValuesOf?: (k: string) =>
   ?? ["Europe/Madrid", "Europe/Berlin", "Europe/London", "America/New_York"];
 
 type Raw = Record<string, unknown>;
-type Editing = { kind: "account" | "category" | "main"; id: string | null } | null;
+type Editing = { kind: "account" | "category" | "main"; id: string | null } | { kind: "card"; id: string | null; accountId: string } | null;
 
 export default function Settings() {
   const { user, profile, signOut } = useAuth();
@@ -32,6 +33,7 @@ export default function Settings() {
   const settings = profile.settings as unknown as Raw;
   const tz = (settings.timezone as string) ?? "Europe/Madrid";
   const close = () => setEditing(null);
+  const cardsOf = (accId: string) => Object.values(docs.cards).filter((c) => c.accountId === accId && !c.archived);
 
   const allAccounts = Object.entries(docs.accounts).sort(([, a], [, b]) => ((a.order as number) ?? 999) - ((b.order as number) ?? 999));
   const accounts = allAccounts.filter(([, a]) => showArchived || !a.archived);
@@ -53,7 +55,7 @@ export default function Settings() {
           <li key={id} className={a.archived ? "archived" : ""}>
             <button className="what plain" onClick={() => setEditing({ kind: "account", id })}>
               <b>{a.name as string}{id === mainAccountId && <em className="badge">principal</em>}{a.archived ? " (archivada)" : ""}</b>
-              <small>Saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}</small>
+              <small>Saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}{cardsOf(id).length > 0 && `, ${cardsOf(id).length === 1 ? "1 tarjeta" : `${cardsOf(id).length} tarjetas`}`}</small>
             </button>
             <span className="amt">{formatCents(core.realBalance(id, currentMonth))}<small>hoy</small></span>
           </li>
@@ -102,14 +104,15 @@ export default function Settings() {
       {MockTools && <Suspense fallback={null}><MockTools /></Suspense>}
       <p className="muted small">Salary 2.0, versión {import.meta.env.MODE}</p>
 
-      {editing?.kind === "account" && <AccountEditor id={editing.id} onClose={close} />}
+      {editing?.kind === "account" && <AccountEditor id={editing.id} onClose={close} onCard={(cardId) => setEditing({ kind: "card", id: cardId, accountId: editing.id! })} />}
+      {editing?.kind === "card" && <CardEditor id={editing.id} accountId={editing.accountId} onClose={() => setEditing({ kind: "account", id: editing.accountId })} />}
       {editing?.kind === "category" && <CategoryEditor id={editing.id} onClose={close} />}
       {editing?.kind === "main" && <MainAccountEditor onClose={close} />}
     </div>
   );
 }
 
-function AccountEditor({ id, onClose }: { id: string | null; onClose: () => void }) {
+function AccountEditor({ id, onClose, onCard }: { id: string | null; onClose: () => void; onCard: (cardId: string | null) => void }) {
   const { user } = useAuth();
   const { docs, core, currentMonth, mainAccountId } = useData();
   const { toast } = useUI();
@@ -130,6 +133,8 @@ function AccountEditor({ id, onClose }: { id: string | null; onClose: () => void
     ...Object.values(docs.budgets).filter((b) => b.accountId === id && !b.end).map(() => "un budget"),
     ...Object.values(docs.cards).filter((c) => c.accountId === id && !c.archived).map((c) => `tarjeta «${c.name}»`),
   ] : [];
+  const cards = Object.entries(docs.cards).filter(([, c]) => c.accountId === id)
+    .sort(([, x], [, y]) => Number(!!x.archived) - Number(!!y.archived) || String(x.name).localeCompare(String(y.name), "es"));
   const balance = id ? core!.realBalance(id, currentMonth) : 0;
   const initialChanged = !!a && value !== null && Math.round(value * 100) !== Math.round(Number(a.initialBalance ?? 0) * 100);
 
@@ -141,6 +146,15 @@ function AccountEditor({ id, onClose }: { id: string | null; onClose: () => void
         <AmountInput value={initial} onChange={setInitial} ariaLabel="Saldo inicial" /></Field>
       {initialChanged && <Warn>El saldo inicial cambia el saldo de todos los meses, también los cerrados.</Warn>}
       {tried && <Errors list={errors} />}
+      {a && <section className="changes">
+        <div className="section-head"><h4>Tarjetas de crédito</h4><button className="link" onClick={() => onCard(null)}>Añadir tarjeta</button></div>
+        {cards.length === 0 ? <p className="muted small">Ninguna tarjeta se paga desde esta cuenta.</p> : (
+          <ul className="rows">
+            {cards.map(([cid, c]) => <li key={cid} className={c.archived ? "archived" : ""}><button className="what plain" onClick={() => onCard(cid)}>
+              <b>{c.name as string}{c.archived ? " (archivada)" : ""}</b>
+              <small>{c.cutoffDay ? `Corte el día ${c.cutoffDay}` : "Se cobra el mes siguiente"}</small></button></li>)}
+          </ul>)}
+      </section>}
       <button className="btn primary wide save" onClick={() => {
         setTried(true);
         if (errors.length) return;

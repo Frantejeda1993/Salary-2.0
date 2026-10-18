@@ -137,6 +137,7 @@ export interface FixedForMonth {
   monto: number; account_id: string | null;
   estado: "pagado" | "impagado"; monto_pagado: number | null;
 }
+export interface DeductionLine { name: string; rate: number; amount: number }
 export interface SalaryBreakdown { base: number; atrasos: number; horas_extra: number; deducciones: number; neto: number }
 export interface ProjectedResult {
   resultado: number; resultado_pre_absorcion: number; budget_details: BudgetDetail[]; deuda_tarjeta_arrastrada: number;
@@ -301,14 +302,20 @@ export class FinanceCore {
         atrasos = 0;
       }
       const overtime = pySum(this.data.overtimes.filter((o) => o.salaryId === salaryId && o.month === month).map((o) => o.gross ?? 0));
-      const deducciones = pySum(
-        deductionsForMonth(salary, month).filter((d) => d.name).map((d) => {
-          const v = (base + atrasos + (d.appliesToExtras ? overtime : 0)) * (d.rate ?? 0);
-          return this.opts.cents ? roundHalfUp(v) : v; // cada deducción, al céntimo
-        }),
-      );
+      const lines: DeductionLine[] = deductionsForMonth(salary, month).filter((d) => d.name).map((d) => {
+        const v = (base + atrasos + (d.appliesToExtras ? overtime : 0)) * (d.rate ?? 0);
+        return { name: d.name as string, rate: d.rate ?? 0, amount: this.opts.cents ? roundHalfUp(v) : v }; // cada deducción, al céntimo
+      });
+      this.cache.set(`sdl|${salaryId}|${month}`, lines);
+      const deducciones = pySum(lines.map((l) => l.amount));
       return { base, atrasos, horas_extra: overtime, deducciones, neto: base + atrasos + overtime - deducciones };
     });
+  }
+
+  /** Deducciones del mes, una a una (las mismas que suma salaryBreakdown). */
+  salaryDeductionLines(salaryId: string, month: Month): DeductionLine[] {
+    this.salaryBreakdown(salaryId, month);
+    return (this.cache.get(`sdl|${salaryId}|${month}`) as DeductionLine[] | undefined) ?? [];
   }
 
   salaryNet(salaryId: string, month: Month): number {

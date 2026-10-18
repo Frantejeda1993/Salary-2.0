@@ -334,3 +334,28 @@ details.edit-section .btn + .btn { margin-top: 8px; }
 .bank + .bank { margin-top: 12px; }
 .bank-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); font-weight: 500; margin: 0 4px 6px; }
 .bank-head .neg { color: var(--out); }
+.figures .loan-fig small { font-size: 12px; color: var(--ink-2); line-height: 1.3; }
+.figures strong.neg { color: var(--out); }
+.rows .what small.loan-note { color: var(--ink); }
+
+/* Ficha de nómina y de gasto fijo (Plan) y tarjetas dentro de la cuenta (Ajustes) */
+.editable-name { display: flex; align-items: center; gap: 4px; margin: 2px 0 2px; }
+.editable-name h3 { font-size: 22px; font-weight: 600; margin: 0; line-height: 1.2; }
+.editable-name.editing { gap: 8px; }
+.editable-name.editing .input { flex: 1; min-width: 0; }
+.calc { margin: 14px 0 6px; padding: 12px 14px; border-radius: 12px; font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--tint-plan) 7%, var(--sheet)); border: 1px solid color-mix(in srgb, var(--tint-plan) 22%, var(--rule)); }
+.calc h4 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.calc h4::first-letter { text-transform: uppercase; }
+.calc-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 15px; }
+.calc-row em { font-style: normal; color: var(--ink-2); font-size: 13px; }
+.calc-row.minus span:last-child { color: var(--out); }
+.calc-row.total { border-top: 1px solid var(--rule); margin-top: 6px; padding-top: 8px; font-weight: 600; font-size: 17px; }
+.changes { margin-top: 16px; }
+.changes h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.changes .section-head { min-height: 44px; align-items: center; }
+.rows .act { display: flex; gap: 2px; flex-shrink: 0; }
+.base-line { margin: 4px 0 0; }
+.quiet-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 22px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.form-title { font-size: 18px; font-weight: 600; margin: 4px 0 10px; }
+.form-actions { display: grid; gap: 8px; margin-top: 16px; }

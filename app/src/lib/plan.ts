@@ -71,3 +71,13 @@ export function monthChoices(current: Month, back = 6, ahead = 12): Month[] {
 let n = 0;
 /** Id local para elementos dentro de un documento (horas extra). */
 export const localId = () => `ot${Date.now().toString(36)}${(n++).toString(36)}`;
+
+/** Cambia una revisión existente (puede cambiar de mes). Si el mes nuevo ya tenía otra, la sustituye. */
+export function replaceRevision<T extends Rev>(revisions: T[] | undefined, oldFrom: Month, rev: T): T[] {
+  const rest = (revisions ?? []).filter((r) => r.from !== oldFrom && r.from !== rev.from);
+  return [...rest, rev].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+}
+
+export function removeRevision<T extends Rev>(revisions: T[] | undefined, from: Month): T[] {
+  return (revisions ?? []).filter((r) => r.from !== from);
+}

@@ -17,14 +17,14 @@ import AmountInput from "./AmountInput";
 import { AccountSelect, Errors, Field, MonthSelect, Section, TextInput, Warn } from "./Form";
 import Sheet from "./Sheet";
 
-type Raw = Record<string, unknown>;
-type Rev = { from: Month } & Raw;
-const euros = (v: unknown) => (v === undefined || v === null ? "" : Number(v).toFixed(2).replace(".", ","));
-const sameCents = (a: number | null, b: unknown) => a !== null && Math.round(a * 100) === Math.round(Number(b) * 100);
-const pastWarning = (from: Month, current: Month) =>
+export type Raw = Record<string, unknown>;
+export type Rev = { from: Month } & Raw;
+export const euros = (v: unknown) => (v === undefined || v === null ? "" : Number(v).toFixed(2).replace(".", ","));
+export const sameCents = (a: number | null, b: unknown) => a !== null && Math.round(a * 100) === Math.round(Number(b) * 100);
+export const pastWarning = (from: Month, current: Month) =>
   from < current ? <Warn>Desde {monthLong(from)}: también cambia meses ya cerrados.</Warn> : null;
 
-function useCtx() {
+export function useCtx() {
   const { user } = useAuth();
   const { docs, currentMonth, mainAccountId } = useData();
   const { toast } = useUI();
@@ -203,11 +203,11 @@ export function BudgetEditor({ id, onClose }: { id: string | null; onClose: () =
 
 // =============================================================================== nómina
 
-interface DedRow { name: string; percent: string; appliesToExtras: boolean }
-const toRows = (deds: Raw[]): DedRow[] => deds.map((d) => ({
+export interface DedRow { name: string; percent: string; appliesToExtras: boolean }
+export const toRows = (deds: Raw[]): DedRow[] => deds.map((d) => ({
   name: String(d.name ?? ""), percent: String(Math.round(Number(d.rate ?? 0) * 1e6) / 1e4).replace(".", ","), appliesToExtras: !!d.appliesToExtras,
 }));
-function rowsToDeds(rows: DedRow[]): { deds: Raw[]; errors: string[] } {
+export function rowsToDeds(rows: DedRow[]): { deds: Raw[]; errors: string[] } {
   const errors: string[] = [];
   const deds = rows.filter((r) => r.name.trim()).map((r) => {
     const rate = r.percent.trim() === "" ? 0 : parsePercent(r.percent);
@@ -217,7 +217,7 @@ function rowsToDeds(rows: DedRow[]): { deds: Raw[]; errors: string[] } {
   return { deds, errors };
 }
 
-function Deductions({ rows, setRows }: { rows: DedRow[]; setRows: (r: DedRow[]) => void }) {
+export function Deductions({ rows, setRows }: { rows: DedRow[]; setRows: (r: DedRow[]) => void }) {
   const upd = (i: number, p: Partial<DedRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   return (
     <div className="deductions">
@@ -335,11 +335,11 @@ export function SalaryEditor({ id, onClose }: { id: string | null; onClose: () =
 
 // =============================================================================== tarjetas
 
-export function CardEditor({ id, onClose }: { id: string | null; onClose: () => void }) {
+export function CardEditor({ id, onClose, accountId }: { id: string | null; onClose: () => void; accountId?: string }) {
   const { uid, docs, mainAccountId, toast } = useCtx();
   const c = id ? (docs.cards[id] as Raw) : null;
   const [name, setName] = useState((c?.name as string) ?? "");
-  const [acc, setAcc] = useState((c?.accountId as string) ?? mainAccountId ?? "");
+  const [acc, setAcc] = useState((c?.accountId as string) ?? accountId ?? mainAccountId ?? "");
   const [natural, setNatural] = useState(!c?.cutoffDay);
   const [cutoff, setCutoff] = useState(c?.cutoffDay ? String(c.cutoffDay) : "");
   const [offset, setOffset] = useState(String(c?.chargeOffsetMonths ?? 1));

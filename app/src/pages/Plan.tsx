@@ -1,13 +1,14 @@
-/** Plan: lo que se repite cada mes (nómina, gastos fijos, budgets y tarjetas). Tocar para cambiar. */
+/** Plan: lo que se repite cada mes (nómina, gastos fijos y budgets; las tarjetas están en Ajustes → cuentas). Tocar para cambiar. */
 import { useState } from "react";
 import { budgetAmountForMonth, fixedAccountForMonth, fixedAmountForMonth, fixedIsOwnForMonth, type Month } from "@salary/engine";
-import { BudgetEditor, CardEditor, FixedEditor, SalaryEditor } from "../components/PlanEditors";
+import { FixedDetail, SalaryDetail } from "../components/PlanDetail";
+import { BudgetEditor, FixedEditor, SalaryEditor } from "../components/PlanEditors";
 import ScreenHeader from "../components/ScreenHeader";
 import { useData } from "../data";
 import { monthLong, nameOf } from "../lib/format";
 import { formatCents } from "../lib/money";
 
-type Editing = { kind: "fixed" | "budget" | "salary" | "card"; id: string | null } | null;
+type Editing = { kind: "fixed" | "budget" | "salary"; id: string | null } | null;
 
 export default function Plan() {
   const { ready, core, docs, currentMonth } = useData();
@@ -27,7 +28,6 @@ export default function Plan() {
   const endedFixed = core.data.fixedExpenses.filter((x) => !isLive(x));
   const endedBudgets = core.data.budgets.filter((x) => !isLive(x));
   const endedSalaries = core.data.salaries.filter((x) => !isLive(x));
-  const cards = Object.entries(docs.cards).sort(([, a], [, b]) => String(a.name).localeCompare(String(b.name), "es"));
   const fixedTotal = fixed.filter((f) => !future(f)).reduce((t, f) => t + fixedAmountForMonth(f, m), 0);
 
   const Head = ({ title, onAdd }: { title: string; onAdd: () => void }) => (
@@ -66,12 +66,7 @@ export default function Plan() {
           <small>{acc(b.accountId)}{starts(b)}{ends(b)}</small></button><span className="amt">{formatCents(budgetAmountForMonth(b, m))}</span></li>)}
       </ul>
 
-      <Head title="Tarjetas de crédito" onAdd={open("card", null)} />
-      <ul className="rows">
-        {cards.length === 0 && <li className="empty">Sin tarjetas.</li>}
-        {cards.map(([id, c]) => <li key={id} className={c.archived ? "archived" : ""}><button className="what plain" onClick={open("card", id)}><b>{c.name as string}{c.archived ? " (archivada)" : ""}</b>
-          <small>Se paga desde {acc(c.accountId as string)}. {c.cutoffDay ? `Corte el día ${c.cutoffDay}` : "Se cobra el mes siguiente"}.</small></button></li>)}
-      </ul>
+      <p className="muted small">Las tarjetas de crédito se configuran en Ajustes, dentro de la cuenta desde la que se pagan.</p>
 
       {(endedFixed.length + endedBudgets.length + endedSalaries.length) > 0 && (
         <details className="done-list">
@@ -84,10 +79,9 @@ export default function Plan() {
         </details>
       )}
 
-      {editing?.kind === "fixed" && <FixedEditor id={editing.id} onClose={() => setEditing(null)} />}
+      {editing?.kind === "fixed" && (editing.id ? <FixedDetail id={editing.id} onClose={() => setEditing(null)} /> : <FixedEditor id={null} onClose={() => setEditing(null)} />)}
       {editing?.kind === "budget" && <BudgetEditor id={editing.id} onClose={() => setEditing(null)} />}
-      {editing?.kind === "salary" && <SalaryEditor id={editing.id} onClose={() => setEditing(null)} />}
-      {editing?.kind === "card" && <CardEditor id={editing.id} onClose={() => setEditing(null)} />}
+      {editing?.kind === "salary" && (editing.id ? <SalaryDetail id={editing.id} onClose={() => setEditing(null)} /> : <SalaryEditor id={null} onClose={() => setEditing(null)} />)}
     </div>
   );
 }

@@ -61,3 +61,21 @@ it("meses para elegir alrededor del actual", () => {
   const m = monthChoices("2026-10", 2, 2);
   expect(m).toEqual(["2026-08", "2026-09", "2026-10", "2026-11", "2026-12"]);
 });
+
+import { removeRevision, replaceRevision } from "../src/lib/plan";
+
+describe("editar y quitar revisiones", () => {
+  type R = { from: string; amount?: number };
+  const revs: R[] = [{ from: "2026-03", amount: 10 }, { from: "2026-06", amount: 12 }];
+  it("cambia importe y mes, y mantiene el orden", () => {
+    expect(replaceRevision(revs, "2026-06", { from: "2026-02", amount: 15 })).toEqual([
+      { from: "2026-02", amount: 15 }, { from: "2026-03", amount: 10 }]);
+  });
+  it("si el mes nuevo ya tenía cambio, lo sustituye", () => {
+    expect(replaceRevision(revs, "2026-06", { from: "2026-03", amount: 20 })).toEqual([{ from: "2026-03", amount: 20 }]);
+  });
+  it("quita una", () => {
+    expect(removeRevision(revs, "2026-03")).toEqual([{ from: "2026-06", amount: 12 }]);
+    expect(revs).toHaveLength(2);
+  });
+});

@@ -11,3 +11,4 @@ export const IconPlus = () => svg(<path d="M12 5v14M5 12h14" />);
 export const IconPrev = () => svg(<path d="M15 6l-6 6 6 6" />);
 export const IconNext = () => svg(<path d="M9 6l6 6-6 6" />);
 export const IconClose = () => svg(<path d="M6 6l12 12M18 6L6 18" />);
+export const IconPencil = () => svg(<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />);
