@@ -191,7 +191,7 @@ def cmd_migrate(args) -> int:
 def _add_history(args, plan) -> bool:
     """Añade al plan el histórico del Excel (opción A: cuentas archivadas propias)."""
     from . import history as H
-    tabs = H.load_tabs(Path(args.history).expanduser())
+    tabs = H.load_tabs(_xlsx_path(args.history))
     ex = H.extract(tabs, args.history_until)
     hp = H.build_plan(tabs, ex, args.history_until, _load_fixes(args.history_fixes))
     print(f"\nHistórico ({Path(args.history).name}, hasta {args.history_until}):")
@@ -207,13 +207,25 @@ def _add_history(args, plan) -> bool:
     return all(c.ok for c in ex.checks) and all(c.ok for c in hp.checks)
 
 
+def _xlsx_path(raw: str) -> Path:
+    """Ruta del Excel con un error claro si no está (y qué hay en esa carpeta)."""
+    p = Path(raw).expanduser()
+    if p.exists():
+        return p
+    folder = p.parent
+    near = sorted(x.name for x in folder.glob("*")) if folder.exists() else []
+    hint = f" En {folder} hay: {', '.join(near)}." if near else f" La carpeta {folder} no existe o está vacía."
+    raise SystemExit(f"No encuentro el Excel {p}.{hint}")
+
+
 def _load_fixes(path: str | None) -> dict | None:
     """Correcciones al histórico (JSON fuera del repo: tiene datos reales)."""
     if not path:
         return None
     p = Path(path).expanduser()
     if not p.exists():
-        raise SystemExit(f"No encuentro el fichero de correcciones {p}.")
+        near = sorted(x.name for x in p.parent.glob("*")) if p.parent.exists() else []
+        raise SystemExit(f"No encuentro el fichero de correcciones {p}." + (f" En {p.parent} hay: {', '.join(near)}." if near else ""))
     return json.loads(p.read_text(encoding="utf-8"))
 
 
@@ -271,7 +283,7 @@ def cmd_history(args) -> int:
     import csv
     from . import history as H
     _check_month(args.until, "--until")
-    tabs = H.load_tabs(Path(args.xlsx).expanduser())
+    tabs = H.load_tabs(_xlsx_path(args.xlsx))
     ex = H.extract(tabs, args.until)
     hp = H.build_plan(tabs, ex, args.until, _load_fixes(args.fixes))
     for line in H.report_lines(ex, hp):
