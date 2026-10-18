@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, type Month } from "@salary/engine";
 import AmountSheet from "../components/AmountSheet";
+import Fold from "../components/Fold";
 import ScreenHeader from "../components/ScreenHeader";
 import { IconNext, IconPrev } from "../components/Icons";
 import { useAuth } from "../auth";
@@ -145,6 +146,7 @@ export default function MonthPage() {
   const real = s.resultado_real;
   const proj = s.resultado_proyectado;
   const committed = real - proj;
+  const doneCents = pySum(doneItems.map((t) => t.cents));
   const pendingCents = pySum(todos.filter((t) => !t.key.startsWith("mis-")).map((t) => t.cents));
 
   const hero = phase === "past"
@@ -212,7 +214,10 @@ export default function MonthPage() {
         </>}
       </div>
 
-      <h2 className="title-sm">{canAct ? "Por hacer" : "Previsto"}</h2>
+      <Budgets month={month} phase={phase} carry={s.remaining_from_previous_month} today={today} />
+
+      <Fold className="fold-main" title={canAct ? "Por hacer" : "Previsto"} total={formatCents(pendingCents)}
+            sub={doneCents ? `pendiente, ${formatCents(doneCents)} pagado` : "pendiente"}>
       {todos.length === 0
         ? <div className="rows"><p className="empty">{canAct ? "Nada pendiente este mes." : "Nada previsto."}</p></div>
         : <ul className="rows">
@@ -231,8 +236,8 @@ export default function MonthPage() {
           </ul>}
 
       {doneItems.length > 0 && (
-        <details className="done-list">
-          <summary>Hecho este mes ({doneItems.length})</summary>
+        <>
+          <h3 className="sub-head">Pagado este mes</h3>
           <ul className="rows done">
             {doneItems.map((t) => (
               <li key={t.key}>
@@ -242,11 +247,13 @@ export default function MonthPage() {
               </li>
             ))}
           </ul>
-        </details>
+        </>
       )}
+      </Fold>
 
-      {phase === "current" && loans.length > 0 && <>
-        <h2 className="title-sm">Préstamos pendientes</h2>
+      {phase === "current" && loans.length > 0 && <Fold className="fold-main" title="Préstamos pendientes"
+            total={<span className={impact.neto < 0 ? "neg" : impact.neto > 0 ? "pos" : ""}>{formatCents(impact.neto)}</span>}
+            sub={loanDetail || `${loans.length} entre otras cuentas`}>
         <ul className="rows">
           {loans.map((t) => {
             const left = outstandingOf(t);
@@ -269,9 +276,7 @@ export default function MonthPage() {
             );
           })}
         </ul>
-      </>}
-
-      <Budgets month={month} phase={phase} carry={s.remaining_from_previous_month} today={today} />
+      </Fold>}
 
       <h2 className="title-sm">Cuentas</h2>
       {groupByBank(sortedLive(docs.accounts)).map(({ bank, accounts }) => {

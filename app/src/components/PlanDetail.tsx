@@ -10,7 +10,7 @@ import { deleteItem, patchItem, type Undo } from "../lib/actions";
 import { monthLong, nameOf } from "../lib/format";
 import { formatCents, formatEuros, parseAmount } from "../lib/money";
 import {
-  canDeleteFixed, endOfMonth, localId, paymentsAfter, removeRevision, replaceRevision, valueInMonth, withRevision,
+  canDeleteFixed, endOfMonth, localId, paidSinceStart, paymentsAfter, removeRevision, replaceRevision, valueInMonth, withRevision,
 } from "../lib/plan";
 import AmountInput from "./AmountInput";
 import { AccountSelect, Errors, Field, MonthSelect, Warn } from "./Form";
@@ -302,6 +302,12 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
           onRemove: () => patch("Cambio quitado", { revisions: removeRevision(revs, r.from) }),
         }))} />
       <p className="muted small base-line">Al empezar ({monthLong(String(fe.start).slice(0, 7))}): {formatEuros(fe.amount as number)} desde {nameOf(docs.accounts, fe.accountId as string)}{fe.isOwnExpense ? ", gasto propio" : ""}.</p>
+
+      {(() => {
+        const p = paidSinceStart(pay, (mm) => Math.round(Number(valueInMonth(fe, revs, "amount", mm)) * 100), m);
+        return <p className="paid-total"><span>Pagado desde el inicio</span><b>{formatCents(p.cents)}</b>
+          <small>{p.months === 1 ? "1 mes pagado" : `${p.months} meses pagados`}</small></p>;
+      })()}
 
       {recent.length > 0 && (
         <section className="changes">

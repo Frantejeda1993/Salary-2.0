@@ -79,3 +79,12 @@ describe("editar y quitar revisiones", () => {
     expect(revs).toHaveLength(2);
   });
 });
+
+describe("paidSinceStart", () => {
+  it("suma los pagos marcados hasta el mes, con su importe o el previsto", async () => {
+    const { paidSinceStart } = await import("../src/lib/plan");
+    const pays = { "2026-08": { status: "paid", amount: 10.5 }, "2026-09": { status: "paid", amount: null }, "2026-10": { status: "skipped" }, "2026-11": { status: "paid", amount: 99 } };
+    expect(paidSinceStart(pays, () => 2000, "2026-10")).toEqual({ cents: 3050, months: 2 });
+    expect(paidSinceStart(undefined, () => 1, "2026-10")).toEqual({ cents: 0, months: 0 });
+  });
+});

@@ -5,6 +5,7 @@ import { useData } from "../data";
 import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
 import { CardEditor } from "../components/PlanEditors";
+import Fold from "../components/Fold";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -38,6 +39,10 @@ export default function Settings() {
   const allAccounts = Object.entries(docs.accounts).sort(([, a], [, b]) => ((a.order as number) ?? 999) - ((b.order as number) ?? 999));
   const accounts = allAccounts.filter(([, a]) => showArchived || !a.archived);
   const archivedCount = allAccounts.length - sortedLive(docs.accounts).length;
+  const live = sortedLive(docs.accounts);
+  const liveCount = live.length;
+  const liveTotal = live.reduce((t, [id]) => t + core.realBalance(id, currentMonth), 0);
+  const liveCats = Object.values(docs.categories).filter((c) => !c.archived).length;
   const catUses = new Map<string, number>();
   for (const m of Object.values(docs.movements)) if (m.categoryId) catUses.set(m.categoryId as string, (catUses.get(m.categoryId as string) ?? 0) + 1);
   const categories = Object.entries(docs.categories).sort(([, a], [, b]) => Number(!!a.archived) - Number(!!b.archived) || String(a.name).localeCompare(String(b.name), "es"));
@@ -46,63 +51,68 @@ export default function Settings() {
     <div className="page">
       <ScreenHeader id="ajustes" />
 
-      <div className="section-head"><h2 className="title-sm">Cuentas</h2><button className="link" onClick={() => setEditing({ kind: "account", id: null })}>Añadir</button></div>
-      {groupByBank(accounts).map(({ bank, accounts: list }) => (
-      <section className="bank" key={bank} aria-label={bank}>
-      <div className="bank-head"><span>{bank}</span></div>
-      <ul className="rows">
-        {list.map(([id, a]) => (
-          <li key={id} className={a.archived ? "archived" : ""}>
-            <button className="what plain" onClick={() => setEditing({ kind: "account", id })}>
-              <b>{a.name as string}{id === mainAccountId && <em className="badge">principal</em>}{a.archived ? " (archivada)" : ""}</b>
-              <small>Saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}{cardsOf(id).length > 0 && `, ${cardsOf(id).length === 1 ? "1 tarjeta" : `${cardsOf(id).length} tarjetas`}`}</small>
-            </button>
-            <span className="amt">{formatCents(core.realBalance(id, currentMonth))}<small>hoy</small></span>
-          </li>
-        ))}
-      </ul>
+      <section className="card me">
+        <div className="me-row">
+          <p><strong>{user?.displayName}</strong><br /><span className="muted">{user?.email}</span></p>
+          <button className="btn small" onClick={signOut}>Cerrar sesión</button>
+        </div>
       </section>
-      ))}
-      <div className="row-actions">
-        <button className="link" onClick={() => setEditing({ kind: "main", id: null })}>Cambiar la cuenta principal</button>
-        {archivedCount > 0 && <button className="link" onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Ocultar archivadas" : `Ver archivadas (${archivedCount})`}</button>}
-      </div>
 
-      <div className="section-head"><h2 className="title-sm">Categorías</h2><button className="link" onClick={() => setEditing({ kind: "category", id: null })}>Añadir</button></div>
-      <p className="muted small">Solo sirven para ordenar y para los budgets: no cambian ningún cálculo.</p>
-      <ul className="rows">
-        {categories.map(([id, c]) => (
-          <li key={id} className={c.archived ? "archived" : ""}>
-            <button className="what plain" onClick={() => setEditing({ kind: "category", id })}>
-              <b>{c.name as string}{c.archived ? " (archivada)" : ""}</b><small>{(catUses.get(id) ?? 0) === 1 ? "1 movimiento" : `${catUses.get(id) ?? 0} movimientos`}</small>
-            </button>
-          </li>
+      <Fold title="Cuentas" total={formatCents(liveTotal)} sub={`${liveCount === 1 ? "1 cuenta" : `${liveCount} cuentas`}, hoy`}>
+        {groupByBank(accounts).map(({ bank, accounts: list }) => (
+        <section className="bank" key={bank} aria-label={bank}>
+        <div className="bank-head"><span>{bank}</span></div>
+        <ul className="rows">
+          {list.map(([id, a]) => (
+            <li key={id} className={a.archived ? "archived" : ""}>
+              <button className="what plain" onClick={() => setEditing({ kind: "account", id })}>
+                <b>{a.name as string}{id === mainAccountId && <em className="badge">principal</em>}{a.archived ? " (archivada)" : ""}</b>
+                <small>Saldo inicial {formatEuros((a.initialBalance as number) ?? 0)}{cardsOf(id).length > 0 && `, ${cardsOf(id).length === 1 ? "1 tarjeta" : `${cardsOf(id).length} tarjetas`}`}</small>
+              </button>
+              <span className="amt">{formatCents(core.realBalance(id, currentMonth))}<small>hoy</small></span>
+            </li>
+          ))}
+        </ul>
+        </section>
         ))}
-      </ul>
+        <button className="btn wide ghost fold-add" onClick={() => setEditing({ kind: "account", id: null })}>Añadir cuenta</button>
+        <div className="row-actions">
+          <button className="link" onClick={() => setEditing({ kind: "main", id: null })}>Cambiar la cuenta principal</button>
+          {archivedCount > 0 && <button className="link" onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Ocultar archivadas" : `Ver archivadas (${archivedCount})`}</button>}
+        </div>
+      </Fold>
 
-      <h2 className="title-sm">Preferencias</h2>
-      <section className="card">
+      <Fold title="Categorías" total={String(liveCats)} sub="activas">
+        <p className="muted small">Solo sirven para ordenar y para los budgets: no cambian ningún cálculo.</p>
+        <ul className="rows">
+          {categories.map(([id, c]) => (
+            <li key={id} className={c.archived ? "archived" : ""}>
+              <button className="what plain" onClick={() => setEditing({ kind: "category", id })}>
+                <b>{c.name as string}{c.archived ? " (archivada)" : ""}</b><small>{(catUses.get(id) ?? 0) === 1 ? "1 movimiento" : `${catUses.get(id) ?? 0} movimientos`}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button className="btn wide ghost fold-add" onClick={() => setEditing({ kind: "category", id: null })}>Añadir categoría</button>
+      </Fold>
+
+      <details className="secondary">
+        <summary>Preferencias y datos técnicos</summary>
         <Field label="Zona horaria" hint="Decide cuándo empieza cada mes y qué día es «hoy».">
           <select className="input" value={tz} onChange={(e) => toast("Zona horaria cambiada", patchSettings(user!.uid, settings, { timezone: e.target.value }))}>
             {ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
           </select></Field>
         <p className="muted small">Gestionas desde {monthLong(settings.startMonth as string)}.
           {settings.ownExpensesFrom ? ` Los reembolsos de gastos propios se controlan aquí desde ${monthLong(settings.ownExpensesFrom as string)}.` : ""}</p>
-      </section>
-
-      <h2 className="title-sm">Tu cuenta</h2>
-      <section className="card">
-        <p><strong>{user?.displayName}</strong><br /><span className="muted">{user?.email}</span></p>
         <div className="field"><span>Tu identificador (uid), para la migración</span>
           <div className="uid">
             <code>{user?.uid}</code>
             <button className="btn small" onClick={() => { navigator.clipboard?.writeText(user!.uid); setCopied(true); }}>{copied ? "Copiado" : "Copiar"}</button>
           </div>
         </div>
-        <button className="btn wide" onClick={signOut}>Cerrar sesión</button>
-      </section>
-      {MockTools && <Suspense fallback={null}><MockTools /></Suspense>}
-      <p className="muted small">Salary 2.0, versión {import.meta.env.MODE}</p>
+        {MockTools && <Suspense fallback={null}><MockTools /></Suspense>}
+        <p className="muted small">Salary 2.0, versión {import.meta.env.MODE}</p>
+      </details>
 
       {editing?.kind === "account" && <AccountEditor id={editing.id} onClose={close} onCard={(cardId) => setEditing({ kind: "card", id: cardId, accountId: editing.id! })} />}
       {editing?.kind === "card" && <CardEditor id={editing.id} accountId={editing.accountId} onClose={() => setEditing({ kind: "account", id: editing.accountId })} />}

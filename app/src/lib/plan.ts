@@ -81,3 +81,20 @@ export function replaceRevision<T extends Rev>(revisions: T[] | undefined, oldFr
 export function removeRevision<T extends Rev>(revisions: T[] | undefined, from: Month): T[] {
   return (revisions ?? []).filter((r) => r.from !== from);
 }
+
+/**
+ * Lo pagado en un gasto fijo desde que empezó (pagos marcados hasta `until`, incluido).
+ * Un pago sin importe propio cuenta lo previsto ese mes. En céntimos.
+ */
+export function paidSinceStart(
+  payments: Record<string, { status?: string; amount?: number | null }> | undefined,
+  amountCentsForMonth: (m: Month) => number, until: Month,
+): { cents: number; months: number } {
+  let total = 0, months = 0;
+  for (const [m, p] of Object.entries(payments ?? {})) {
+    if (m > until || p?.status !== "paid") continue;
+    total += p.amount != null ? cents(p.amount) : amountCentsForMonth(m);
+    months++;
+  }
+  return { cents: total, months };
+}
