@@ -4,7 +4,7 @@ Reconstrucción de la app de finanzas personales Salary (Streamlit) como PWA
 instalable en móvil: React + Vite + Firebase (Auth con Google, Firestore con
 caché offline), desplegada en GitHub Pages.
 
-Estado: **Fase 6 — interfaz móvil (Mes, alta rápida y atajos; en curso).** Publicada en <https://frantejeda1993.github.io/Salary-2.0/>.
+Estado: **Fase 6 — interfaz móvil completa (pendiente de tu validación).** Publicada en <https://frantejeda1993.github.io/Salary-2.0/>.
 
 | Ruta | Contenido |
 | --- | --- |

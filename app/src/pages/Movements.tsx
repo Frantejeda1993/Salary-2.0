@@ -1,11 +1,8 @@
-/** Movimientos del mes, por día. Tocar uno muestra su detalle y permite borrarlo. */
+/** Movimientos del mes, por día. Tocar uno lo abre para editarlo o borrarlo. */
 import { useState } from "react";
 import { addMonths, monthOf, type Month } from "@salary/engine";
 import { IconNext, IconPrev } from "../components/Icons";
-import Sheet from "../components/Sheet";
-import { useAuth } from "../auth";
 import { useData } from "../data";
-import { deleteMovement } from "../lib/actions";
 import { dayLong, monthLong, monthName, nameOf } from "../lib/format";
 import { formatEuros } from "../lib/money";
 import { useUI } from "../ui";
@@ -14,12 +11,10 @@ type Raw = Record<string, unknown>;
 const KIND: Record<string, string> = { normal: "Transferencia", loan: "Préstamo", loanRepayment: "Devolución de préstamo", ownExpenseRefund: "Reembolso de gastos propios" };
 
 export default function Movements() {
-  const { user } = useAuth();
   const { ready, docs, currentMonth } = useData();
-  const { toast } = useUI();
+  const { openQuickAdd } = useUI();
   const [month, setMonth] = useState<Month>(currentMonth);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<[string, Raw] | null>(null);
   if (!ready) return <div className="splash">Cargando tus datos…</div>;
 
   const acc = (id: unknown) => nameOf(docs.accounts, id as string);
@@ -62,7 +57,7 @@ export default function Movements() {
           <ul className="rows">
             {list.map(([id, m]) => (
               <li key={id}>
-                <button className="what plain" onClick={() => setOpen([id, m])}>
+                <button className="what plain" onClick={() => openQuickAdd({ edit: { id, data: m } })}>
                   <b>{(m.description as string) || (m.type === "transfer" ? KIND[m.transferKind as string] ?? "Transferencia" : "Sin concepto")}</b>
                   <small>{describe(m)}</small>
                 </button>
@@ -73,21 +68,6 @@ export default function Movements() {
           </ul>
         </section>
       ))}
-      {open && (
-        <Sheet title={(open[1].description as string) || "Movimiento"} onClose={() => setOpen(null)}>
-          <p className="big-amount"><strong className="title-xl">{formatEuros(open[1].amount as number)}</strong></p>
-          <p className="muted">{dayLong(open[1].date as string)}. {describe(open[1])}.</p>
-          {(open[1].loan as { outstanding?: number } | undefined)?.outstanding !== undefined &&
-            <p className="muted">Quedan {formatEuros((open[1].loan as { outstanding: number }).outstanding)} por devolver.</p>}
-          <p className="muted small">Para cambiarlo, bórralo y vuelve a crearlo. La edición llega en la próxima entrega.</p>
-          <button className="btn wide save" onClick={() => {
-            const [id, data] = open;
-            const undo = deleteMovement(user!.uid, id, data);
-            setOpen(null);
-            toast("Movimiento borrado", undo);
-          }}>Borrar movimiento</button>
-        </Sheet>
-      )}
     </div>
   );
 }

@@ -95,8 +95,20 @@ export default function MonthPage() {
       done: "Tarjeta saldada",
     });
   }
+  // Pago de tarjeta que ya no cuadra con sus compras (se editó o añadió alguna después de saldar).
+  const groupTotal = new Map(core.creditGroups().map((g) => [`${g.account_id}|${g.mes_cargo}`, g.total]));
   for (const [id, st] of Object.entries(docs.cardSettlements)) {
     if (monthOf(st.date as string) !== month) continue;
+    const paid = Math.round((st.amount as number) * 100);
+    const total = groupTotal.get(`${st.accountId}|${st.chargeMonth}`) ?? 0;
+    if (paid !== total) {
+      todos.push({
+        key: `mis-${id}`, title: `${nameOf(docs.cards, st.cardId as string, "Tarjeta")}: el pago no cuadra`,
+        detail: `Saldaste ${formatCents(paid)}, pero las compras de ${monthName(st.chargeMonth as string)} suman ${formatCents(total)}. Deshaz el pago y vuelve a saldar.`,
+        cents: total - paid, button: "Deshacer pago", act: () => unsettleCard(uid, id, st), done: "Pago de tarjeta deshecho",
+      });
+      continue;
+    }
     doneItems.push({
       key: `st-${id}`, title: nameOf(docs.cards, st.cardId as string, "Tarjeta"), detail: `Cargo de ${monthName(st.chargeMonth as string)} saldado`,
       cents: Math.round((st.amount as number) * 100), button: "Deshacer", act: () => unsettleCard(uid, id, st), done: "Pago de tarjeta deshecho",
@@ -127,7 +139,7 @@ export default function MonthPage() {
   const real = s.resultado_real;
   const proj = s.resultado_proyectado;
   const committed = real - proj;
-  const pendingCents = pySum(todos.map((t) => t.cents));
+  const pendingCents = pySum(todos.filter((t) => !t.key.startsWith("mis-")).map((t) => t.cents));
 
   const hero = phase === "past"
     ? { label: `Cerraste ${monthName(month)} con`, value: real }

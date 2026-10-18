@@ -6,6 +6,8 @@ import { setWriteErrorHandler, type Undo } from "./lib/actions";
 
 export interface QuickAddPrefill {
   amount?: string; description?: string; payWith?: string; date?: string; source?: "app" | "shortcut";
+  /** Editar un movimiento existente en vez de crear uno. */
+  edit?: { id: string; data: Record<string, unknown> };
   /** Avisos sobre el atajo (p. ej. una tarjeta que no se encontró). */
   notes?: string[];
 }

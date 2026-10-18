@@ -6,7 +6,8 @@
  */
 import { deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
-import { userItem } from "./paths";
+import { userDoc, userItem, type UserCollection } from "./paths";
+import { loanAfterAmountChange, loanAfterRepayment } from "./plan";
 
 export type Undo = () => void;
 
@@ -43,10 +44,81 @@ export function addMovement(uid: string, m: NewMovement, source: Source = "app")
   return { id: ref.id, undo: () => run(deleteDoc(ref)) };
 }
 
-export function deleteMovement(uid: string, id: string, data: Record<string, unknown>): Undo {
+type Raw = Record<string, unknown>;
+type LoanState = { status: "pending" | "paid"; outstanding: number };
+
+/**
+ * Borra un movimiento. Si es una devolución de préstamo registrada en esta app (con loanId),
+ * el préstamo recupera ese importe pendiente, en la misma escritura.
+ */
+export function deleteMovement(uid: string, id: string, data: Raw, loan?: Raw): Undo {
   const ref = userItem(uid, "movements", id);
+  const loanId = data.loanId as string | undefined;
+  if (data.transferKind === "loanRepayment" && loanId && loan) {
+    const before = loan.loan as LoanState;
+    const after = loanAfterRepayment(loan.amount as number, before.outstanding, -(data.amount as number));
+    const loanRef = userItem(uid, "movements", loanId);
+    const b = writeBatch(db);
+    b.delete(ref);
+    b.update(loanRef, { loan: after });
+    run(b.commit());
+    return () => { const u = writeBatch(db); u.set(ref, data); u.update(loanRef, { loan: before }); run(u.commit()); };
+  }
   run(deleteDoc(ref));
   return () => run(setDoc(ref, data));
+}
+
+/**
+ * Sustituye un movimiento por su versión editada (conserva createdAt, source y legacy).
+ * Préstamo: si cambia el importe, se conserva lo devuelto. Devolución con loanId: el
+ * préstamo se ajusta por la diferencia.
+ */
+export function updateMovement(uid: string, id: string, before: Raw, after: Raw, loan?: Raw): Undo {
+  const ref = userItem(uid, "movements", id);
+  const next: Raw = { ...before, ...after, updatedAt: now() };
+  if (next.card === undefined) delete next.card;
+  if (before.transferKind === "loan" && before.loan && after.amount !== before.amount) {
+    const l = before.loan as LoanState;
+    next.loan = loanAfterAmountChange(before.amount as number, l.outstanding, after.amount as number);
+  }
+  const loanId = before.loanId as string | undefined;
+  if (before.transferKind === "loanRepayment" && loanId && loan && after.amount !== before.amount) {
+    const l = loan.loan as LoanState;
+    const loanRef = userItem(uid, "movements", loanId);
+    const b = writeBatch(db);
+    b.set(ref, next);
+    b.update(loanRef, { loan: loanAfterRepayment(loan.amount as number, l.outstanding, (after.amount as number) - (before.amount as number)) });
+    run(b.commit());
+    return () => { const u = writeBatch(db); u.set(ref, before); u.update(loanRef, { loan: l }); run(u.commit()); };
+  }
+  run(setDoc(ref, next));
+  return () => run(setDoc(ref, before));
+}
+
+/** Crear un documento en una colección del usuario. */
+export function createItem(uid: string, col: UserCollection, data: Raw): { id: string; undo: Undo } {
+  const ref = userItem(uid, col);
+  run(setDoc(ref, { ...data, createdAt: now(), source: "app" }));
+  return { id: ref.id, undo: () => run(deleteDoc(ref)) };
+}
+
+/** Cambiar campos de un documento; deshacer lo deja exactamente como estaba. */
+export function patchItem(uid: string, col: UserCollection, id: string, patch: Raw, before: Raw): Undo {
+  const ref = userItem(uid, col, id);
+  run(updateDoc(ref, { ...patch, updatedAt: now() }));
+  return () => run(setDoc(ref, before));
+}
+
+export function deleteItem(uid: string, col: UserCollection, id: string, before: Raw): Undo {
+  const ref = userItem(uid, col, id);
+  run(deleteDoc(ref));
+  return () => run(setDoc(ref, before));
+}
+
+/** Cambiar ajustes del perfil (users/{uid}.settings), con deshacer. */
+export function patchSettings(uid: string, before: Raw, patch: Raw): Undo {
+  run(setDoc(userDoc(uid), { settings: { ...before, ...patch } }, { merge: true }));
+  return () => run(setDoc(userDoc(uid), { settings: before }, { merge: true }));
 }
 
 type Payment = { status: "paid" | "unpaid"; amount: number | null } & Record<string, unknown>;
@@ -85,7 +157,7 @@ export function refundOwnExpenses(uid: string, r: { from: string; to: string; am
 export function repayLoan(uid: string, loanId: string, loan: Record<string, unknown>, amount: number, date: string): Undo {
   const current = loan.loan as { status: string; outstanding: number } | undefined;
   const outstanding = current?.outstanding ?? (loan.amount as number);
-  const left = Math.max(Math.round((outstanding - amount) * 100) / 100, 0);
+  const after = loanAfterRepayment(loan.amount as number, outstanding, amount);
   const loanRef = userItem(uid, "movements", loanId);
   const repRef = userItem(uid, "movements");
   const b = writeBatch(db);
@@ -94,7 +166,7 @@ export function repayLoan(uid: string, loanId: string, loan: Record<string, unkn
     accountId: loan.toAccountId, toAccountId: loan.accountId, transferKind: "loanRepayment", loanId,
     createdAt: now(), source: "app",
   });
-  b.update(loanRef, { loan: { status: left === 0 ? "paid" : "pending", outstanding: left } });
+  b.update(loanRef, { loan: after });
   run(b.commit());
   return () => {
     const u = writeBatch(db);
