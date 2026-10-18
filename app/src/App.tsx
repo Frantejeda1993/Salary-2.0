@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./auth";
 import { useData } from "./data";
 import QuickAdd from "./components/QuickAdd";
 import TabBar from "./components/TabBar";
+import Tour from "./components/Tour";
 import { parseAmount } from "./lib/money";
 import { matchByName, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
@@ -31,6 +32,20 @@ function Shell() {
   const { quickAdd, openQuickAdd } = useUI();
   const proxy = useRef<HTMLInputElement>(null);
   const loc = useLocation();
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const { ready } = useData();
+  // Tour: una vez, tras la bienvenida; Ajustes lo vuelve a lanzar con el evento «salary:tour».
+  const [tour, setTour] = useState(false);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    if (ready && !seen && !(profile as { tourDone?: boolean } | null)?.tourDone && loc.pathname === "/") { setSeen(true); setTour(true); }
+  }, [ready, profile, seen, loc.pathname]);
+  useEffect(() => {
+    const start = () => { navigate("/"); setTour(true); };
+    window.addEventListener("salary:tour", start);
+    return () => window.removeEventListener("salary:tour", start);
+  }, [navigate]);
   return (
     <div className="app">
       <main className="content">
@@ -50,6 +65,7 @@ function Shell() {
       <input ref={proxy} className="focus-proxy" inputMode="decimal" tabIndex={-1} aria-hidden="true" />
       <TabBar onAdd={() => { proxy.current?.focus(); openQuickAdd(); }} />
       {quickAdd && <QuickAdd prefill={quickAdd} />}
+      {tour && user && !quickAdd && <Tour uid={user.uid} onClose={() => { setSeen(true); setTour(false); }} />}
     </div>
   );
 }

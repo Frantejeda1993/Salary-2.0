@@ -13,7 +13,7 @@ import {
   canDeleteFixed, endOfMonth, localId, paidSinceStart, paymentsAfter, removeRevision, replaceRevision, valueInMonth, withRevision,
 } from "../lib/plan";
 import AmountInput from "./AmountInput";
-import { AccountSelect, Errors, Field, MonthSelect, Warn } from "./Form";
+import { AccountSelect, CategorySelect, Errors, Field, MonthSelect, Warn } from "./Form";
 import { IconPencil } from "./Icons";
 import {
   Deductions, euros, pastWarning, rowsToDeds, toRows, useCtx, type DedRow, type Raw, type Rev,
@@ -293,6 +293,9 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
           <div className="calc-row total"><span>Estado</span><span>{thisMonth?.status === "paid" ? `Pagado${thisMonth.amount != null ? ` (${formatEuros(thisMonth.amount)})` : ""}` : "Pendiente"}</span></div>
         </section>
       ) : <p className="muted">{fe.end ? `Terminó en ${monthLong(String(fe.end).slice(0, 7))}.` : `Empieza en ${monthLong(String(fe.start).slice(0, 7))}.`}</p>}
+
+      <label className="field inline-field"><span>Categoría</span>
+        <CategorySelect value={(fe.categoryId as string) ?? ""} onChange={(c) => save(c ? `Categoría: ${nameOf(docs.categories, c)}` : "Sin categoría", patchItem(uid, "fixedExpenses", id, { categoryId: c || null }, fe))} /></label>
 
       <ChangeList title="Cambios" addLabel="Añadir cambio" empty="Sin cambios desde que empezó."
         onAdd={() => setMode({ kind: "change" })}

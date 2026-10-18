@@ -6,6 +6,7 @@ import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
 import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
+import ShortcutGuide from "../components/ShortcutGuide";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -95,6 +96,12 @@ export default function Settings() {
         </ul>
         <button className="btn wide ghost fold-add" onClick={() => setEditing({ kind: "category", id: null })}>Añadir categoría</button>
       </Fold>
+
+      <Fold title="Apuntar al pagar con Apple Pay" sub="iPhone, con Atajos">
+        <ShortcutGuide />
+      </Fold>
+
+      <button className="link tour-link" onClick={() => window.dispatchEvent(new Event("salary:tour"))}>Ver el tour de la app</button>
 
       <details className="secondary">
         <summary>Preferencias y datos técnicos</summary>

@@ -38,6 +38,19 @@ export function AccountSelect({ value, onChange, include }: { value: string; onC
   );
 }
 
+/** Categoría opcional (solo etiqueta). Incluye la elegida aunque esté archivada. */
+export function CategorySelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const { docs } = useData();
+  const list = sortedLive(docs.categories);
+  if (value && docs.categories[value] && !list.some(([id]) => id === value)) list.push([value, docs.categories[value]]);
+  return (
+    <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Sin categoría</option>
+      {list.map(([id, c]) => <option key={id} value={id}>{c.name as string}{c.archived ? " (archivada)" : ""}</option>)}
+    </select>
+  );
+}
+
 export function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete="off" />;
 }

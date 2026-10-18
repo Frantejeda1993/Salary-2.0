@@ -14,7 +14,7 @@ import { SPAIN_DEDUCTIONS } from "../lib/onboarding";
 import { canDeleteFixed, endOfMonth, localId, paymentsAfter, valueInMonth, withRevision } from "../lib/plan";
 import { useUI } from "../ui";
 import AmountInput from "./AmountInput";
-import { AccountSelect, Errors, Field, MonthSelect, Section, TextInput, Warn } from "./Form";
+import { AccountSelect, CategorySelect, Errors, Field, MonthSelect, Section, TextInput, Warn } from "./Form";
 import Sheet from "./Sheet";
 
 export type Raw = Record<string, unknown>;
@@ -41,6 +41,7 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
   const curAcc = fe ? (valueInMonth(fe, revs, "accountId", currentMonth) as string) : mainAccountId ?? "";
 
   const [name, setName] = useState((fe?.name as string) ?? "");
+  const [categoryId, setCategoryId] = useState((fe?.categoryId as string) ?? "");
   const [from, setFrom] = useState<Month>(fe ? addMonths(currentMonth, 1) : currentMonth);
   // Se rellena con el importe vigente en el mes elegido (puede haber ya un cambio programado).
   const [amount, setAmount] = useState(fe ? euros(valueInMonth(fe, revs, "amount", addMonths(currentMonth, 1))) : "");
@@ -60,6 +61,7 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
         <Field label="Nombre"><TextInput value={name} onChange={setName} placeholder="Alquiler" /></Field>
         <Field label="Importe cada mes"><AmountInput value={amount} onChange={setAmount} ariaLabel="Importe" /></Field>
         <Field label="Se paga desde"><AccountSelect value={acc} onChange={setAcc} /></Field>
+        <Field label="Categoría" hint="Opcional. Sirve para ordenar y buscar; no cambia ningún cálculo."><CategorySelect value={categoryId} onChange={setCategoryId} /></Field>
         <Field label="Empieza en"><MonthSelect value={from} onChange={setFrom} /></Field>
         {acc && acc !== mainAccountId && (
           <label className="check"><input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
@@ -71,7 +73,7 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
           setTried(true);
           if (errors.length) return;
           const { undo } = createItem(uid, "fixedExpenses", {
-            name: name.trim(), amount: value, start: `${from}-01`, end: null, accountId: acc,
+            name: name.trim(), amount: value, start: `${from}-01`, end: null, accountId: acc, categoryId: categoryId || null,
             isOwnExpense: own && acc !== mainAccountId, revisions: [], payments: {},
           });
           done(`${name.trim()} añadido`, undo);

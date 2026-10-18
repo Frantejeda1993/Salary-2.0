@@ -420,3 +420,31 @@ details.secondary[open] > summary::after { transform: rotate(225deg); margin-bot
    Esta franja opaca evita que lo que se desplaza quede debajo de la hora y el notch. */
 .app::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top); background: var(--paper); z-index: 30; pointer-events: none; }
 .splash, .center-screen { padding-top: var(--safe-top); }
+.inline-field { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; margin: 12px 0 0; }
+.inline-field > span { font-size: 15px; color: var(--ink); }
+
+/* Tour de bienvenida */
+.tour { position: fixed; inset: 0; z-index: 60; }
+.tour-catch { position: absolute; inset: 0; }
+.tour-spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(8, 12, 24, .62), 0 0 0 2px var(--action);
+  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease; pointer-events: none; }
+.tour-card { position: fixed; left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); max-width: 420px; margin: 0 auto;
+  background: var(--sheet); color: var(--ink); border-radius: 16px; padding: 14px 16px 10px; box-shadow: var(--shadow); }
+.tour-card h2 { font-size: 18px; margin: 2px 0 6px; }
+.tour-card p { margin: 0 0 8px; font-size: 15px; line-height: 1.45; }
+.tour-card .tour-count { font-size: 12px; color: var(--ink-2); margin: 0; }
+.tour-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tour-actions span { display: flex; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot { transition: none; } }
+
+/* Guía del atajo de Apple Pay */
+.guide { padding: 0 4px; font-size: 15px; line-height: 1.45; }
+.guide > p:first-child { margin-top: 0; }
+.guide-limits { margin: 0 0 8px; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+.guide-limits li + li { margin-top: 4px; }
+.guide-steps { padding-left: 20px; margin: 12px 0; }
+.guide-steps li + li { margin-top: 8px; }
+.guide-code { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 8px 10px; background: var(--sheet-2); border-radius: 10px; }
+.guide-code code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.tour-link { display: block; margin: 14px 0 0; }
+a.btn { text-decoration: none; display: flex; align-items: center; justify-content: center; color: inherit; }
