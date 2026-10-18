@@ -23,6 +23,7 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | D3 + A1 | `fixD3` | Gastos propios: en meses cerrados se debe lo marcado pagado; en el actual y futuros, lo previsto. El pendiente se acumula hasta reembolsarse. El proyectado del mes actual resta todo el pendiente; el de cada mes futuro, lo de ese mes. El proyectado mostrado es lo que se arrastra. `settings.ownExpensesFrom` marca desde qué mes se controlan en la app. |
 | Céntimos | `cents` | Cálculo en céntimos enteros; deducciones redondeadas al céntimo (mitades hacia arriba); reparto del déficit al céntimo, resto al último budget. |
 | C | `perCardSettlement` | Los pagos de tarjeta se agrupan por **tarjeta** y mes de cargo (antes por cuenta y mes). Con una tarjeta por cuenta no cambia ninguna cifra. |
+| D (19-oct-2026) | `incomeOffsetsBudget` | Un ingreso con la categoría de un budget activo **en la misma cuenta** es una devolución: resta del gasto de ese budget (puede dejarlo en negativo) y **deja de sumar como ingreso** en el proyectado, para no contarlo dos veces. Se reserva el mayor entre el budget y el gasto neto. Aplica a todos los meses (decisión de Francisco: «siempre»); el saldo real y el resultado real de los meses cerrados no cambian. Ingresos sin budget de su categoría, igual que antes. |
 
 ## Decisiones sin opción (comportamiento nuevo directo)
 
@@ -38,7 +39,7 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | — | Un gasto fijo **no marcado como pagado** en un mes cerrado significa que **ese mes no se pagó**. |
 | — | El inicio del arrastre se liga a `settings.startMonth` (equivalente a `min_managed_month`). |
 | — | Configuración explícita de tarjetas de crédito (`cards`: cuenta, corte, cobro, dónde se reserva). |
-| — | Un gasto fijo puede, opcionalmente, contar dentro del budget de su categoría (`countsInBudget`, misma cuenta). |
+| — | Un gasto fijo puede, opcionalmente, contar dentro del budget de su categoría (`countsInBudget`, misma cuenta). Cuenta su importe pagado o, si no, el previsto, desde el día 1; se reserva max(budget, variable + fijo) sin duplicar el fijo. Con dos budgets de la misma categoría, solo en el primero. |
 | — | Un gasto fijo con pagos no se borra: se termina. Editar el importe de un préstamo conserva lo devuelto. |
 
 ## Migración

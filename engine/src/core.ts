@@ -29,10 +29,15 @@ export interface EngineOptions {
   cents: boolean;
   /** C: los pagos de tarjeta se agrupan por tarjeta y mes de cargo (antes, por cuenta y mes). */
   perCardSettlement?: boolean;
+  /**
+   * D (19-oct-2026): un ingreso con la categoría de un budget activo (misma cuenta) es una
+   * devolución: resta del gasto de ese budget y deja de sumar como ingreso en el proyectado.
+   */
+  incomeOffsetsBudget?: boolean;
 }
 
 export const LEGACY_OPTIONS: EngineOptions = Object.freeze({ fixB6: false, fixB1: false, fixD3: false, cents: false, perCardSettlement: false });
-export const CURRENT_OPTIONS: EngineOptions = Object.freeze({ fixB6: true, fixB1: true, fixD3: true, cents: true, perCardSettlement: true });
+export const CURRENT_OPTIONS: EngineOptions = Object.freeze({ fixB6: true, fixB1: true, fixD3: true, cents: true, perCardSettlement: true, incomeOffsetsBudget: true });
 
 /** Redondeo al entero más cercano, mitades hacia fuera (como una nómina), tolerante al ruido binario. */
 export function roundHalfUp(v: number): number {
@@ -106,6 +111,8 @@ export interface BudgetDetail {
   available: number;
   /** Gastos fijos marcados para contar en este budget (ya se descuentan como fijos). */
   fixed_in_budget?: number;
+  /** D: ingresos de la categoría que restan del gasto del budget. */
+  income_offset?: number;
   absorbed?: number;
 }
 
@@ -372,6 +379,23 @@ export class FinanceCore {
     });
   }
 
+  /**
+   * D: ingresos por categoría de una cuenta y mes, solo de categorías con un budget activo en
+   * esa cuenta (son devoluciones de ese gasto). Vacío si la regla D está desactivada.
+   */
+  budgetIncomeOffsets(month: Month, accountId: string): Map<string, number> {
+    return this.memo(`bio|${month}|${accountId}`, () => {
+      const out = new Map<string, number>();
+      if (!this.opts.incomeOffsetsBudget) return out;
+      const cats = new Set(this.activeBudgets(month).filter((b) => b.accountId === accountId).map((b) => b.categoryId));
+      for (const inc of this.data.incomes) {
+        if (inc.accountId !== accountId || !inc.categoryId || !cats.has(inc.categoryId) || monthOf(inc.date) !== month) continue;
+        out.set(inc.categoryId, (out.get(inc.categoryId) ?? 0) + (inc.amount ?? 0));
+      }
+      return out;
+    });
+  }
+
   rawCategoryExpenses(month: Month, accountId: string | null = null): Map<string, number> {
     return this.memo(`rce|${month}|${accountId}`, () => {
       const raw = new Map<string, number>();
@@ -532,6 +556,8 @@ export class FinanceCore {
       const budgets = this.activeBudgets(month).filter((b) => b.accountId === accountId);
       const raw = this.rawCategoryExpenses(month, accountId);
       const fib = new Map(this.fixedInBudget(month, accountId));
+      const offs = new Map(this.budgetIncomeOffsets(month, accountId));
+      let offsetIncome = 0;
 
       let budgetImpact = 0;
       const details: BudgetDetail[] = [];
@@ -539,21 +565,25 @@ export class FinanceCore {
         const spent = raw.get(b.categoryId as string) ?? 0;
         const amount = budgetAmountForMonth(b, month);
         // Un fijo que cuenta en el budget ya está en fixedTotal: aquí solo se reserva lo que falta.
-        // Si hubiera dos budgets de la misma categoría, el fijo cuenta solo en el primero.
+        // Si hubiera dos budgets de la misma categoría, el fijo y las devoluciones cuentan solo en el primero.
         const fx = fib.get(b.categoryId as string) ?? 0;
         fib.delete(b.categoryId as string);
-        const effective = pyMax(spent, 0) + fx;
+        // D: las devoluciones restan del gasto y salen del ingreso (si no, contarían dos veces).
+        const inc = offs.get(b.categoryId as string) ?? 0;
+        offs.delete(b.categoryId as string);
+        offsetIncome += inc;
+        const effective = pyMax(spent, 0) + fx - inc;
         budgetImpact += pyMax(amount, effective) - fx;
         details.push({
           budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent,
-          available: amount - effective, absorbed: 0, ...(fx ? { fixed_in_budget: fx } : {}),
+          available: amount - effective, absorbed: 0, ...(fx ? { fixed_in_budget: fx } : {}), ...(inc ? { income_offset: inc } : {}),
         });
       }
       const budgetCats = new Set(budgets.map((b) => b.categoryId));
       const nonBudgeted = pySum([...raw].filter(([cat]) => !budgetCats.has(cat)).map(([, v]) => v));
       const creditCarried = this.creditDebtCarriedInto(accountId, month);
 
-      const pre = income + remainingFromPrevious - fixedTotal - budgetImpact - nonBudgeted - transfersOut - creditCarried;
+      const pre = income - offsetIncome + remainingFromPrevious - fixedTotal - budgetImpact - nonBudgeted - transfersOut - creditCarried;
       const resultado = absorbDeficit(pre, details, true, this.opts.cents);
       return { resultado, resultado_pre_absorcion: pre, budget_details: details, deuda_tarjeta_arrastrada: creditCarried };
     });
@@ -641,6 +671,7 @@ export class FinanceCore {
       );
       const raw = this.rawCategoryExpenses(target, accountId);
       const fib = new Map(this.fixedInBudget(target, accountId));
+      const offs = new Map(this.budgetIncomeOffsets(target, accountId));
       const details: BudgetDetail[] = [];
       let pendingBudget = 0;
       for (const b of this.activeBudgets(target)) {
@@ -648,10 +679,12 @@ export class FinanceCore {
         const spent = raw.get(b.categoryId as string) ?? 0;
         const fx = fib.get(b.categoryId as string) ?? 0;
         fib.delete(b.categoryId as string);
-        const effective = pyMax(spent, 0) + fx;
+        const inc = offs.get(b.categoryId as string) ?? 0;
+        offs.delete(b.categoryId as string);
+        const effective = pyMax(spent, 0) + fx - inc;
         const amount = budgetAmountForMonth(b, target);
         details.push({ budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent, available: amount - effective,
-          ...(fx ? { fixed_in_budget: fx } : {}) });
+          ...(fx ? { fixed_in_budget: fx } : {}), ...(inc ? { income_offset: inc } : {}) });
         if (effective < amount) pendingBudget += amount - effective;
       }
       const creditPending = this.creditOutstanding(accountId, target, true);

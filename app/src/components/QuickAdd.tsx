@@ -91,6 +91,11 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const [remember, setRemember] = useState(true);
   const payName = payWith.startsWith("card:") ? (docs.cards[payWith.slice(5)]?.name as string) : (docs.accounts[payWith.slice(4)]?.name as string);
 
+  // Regla D: un ingreso con la categoría de un budget activo de la cuenta es una devolución.
+  const incomeAcc = payWith.startsWith("acc:") ? payWith.slice(4) : (docs.cards[payWith.slice(5)]?.accountId as string | undefined);
+  const refundBudget = kind === "income" && !!categoryId && Object.values(docs.budgets).some((b) => b.categoryId === categoryId && b.accountId === incomeAcc
+    && String(b.start).slice(0, 7) <= date.slice(0, 7) && (!b.end || String(b.end).slice(0, 7) >= date.slice(0, 7)));
+
   function save() {
     setTried(true);
     if (!amountOk) { document.querySelector<HTMLInputElement>(".big-amount input")?.focus(); return; }
@@ -198,6 +203,9 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
                         onClick={() => { setCategoryId(id); setCatTouched(true); }}>{c.name as string}</button>
               ))}
             </div>
+            {kind === "income" && categoryId && refundBudget && (
+              <small className="hint-text">Hay un budget de {docs.categories[categoryId]?.name as string} en esta cuenta: este ingreso cuenta como devolución y resta de lo gastado.</small>
+            )}
           </div>
         </>}
 

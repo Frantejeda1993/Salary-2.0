@@ -27,7 +27,11 @@ export default function SpendingSheet({ month, phase, onClose }: { month: Month;
   const [sel, setSel] = useState<string | null>(null);
   if (!core) return null;
   const acc = scope === "main" ? mainAccountId : null;
-  const raw = core.rawCategoryExpenses(month, acc);
+  // Regla D: los ingresos de una categoría con budget son devoluciones y restan de su gasto.
+  const raw = new Map(core.rawCategoryExpenses(month, acc));
+  for (const a of acc ? [acc] : Object.keys(docs.accounts)) {
+    for (const [cat, v] of core.budgetIncomeOffsets(month, a)) raw.set(cat, (raw.get(cat) ?? 0) - v);
+  }
   const fixed = core.fixedExpensesForMonth(month).filter((f) => !acc || f.account_id === acc);
   const fixedPaid = fixed.filter((f) => f.estado === "pagado")
     .map((f) => ({ categoryId: (docs.fixedExpenses[f.id]?.categoryId as string | undefined) ?? null, cents: f.monto_pagado ?? f.monto }));
@@ -76,7 +80,7 @@ export default function SpendingSheet({ month, phase, onClose }: { month: Month;
         </ul>
       </>}
       <p className="muted small">
-        Gastos apuntados (las compras con tarjeta, en el mes en que las descuentas) y gastos fijos pagados. No incluye transferencias ni préstamos.
+        Gastos apuntados (las compras con tarjeta, en el mes en que las descuentas) y gastos fijos pagados, menos los ingresos de categorías con budget, que cuentan como devoluciones. No incluye transferencias ni préstamos.
         {phase === "current" && pendingFixed > 0 ? ` Faltan ${formatCents(pendingFixed)} de gastos fijos por pagar.` : ""}
       </p>
     </Sheet>

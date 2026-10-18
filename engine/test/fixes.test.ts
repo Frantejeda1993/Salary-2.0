@@ -392,3 +392,41 @@ it("gasto fijo en el budget: con dos budgets de la misma categoría cuenta una s
   // sin marcar: 700 + 1000 + 200; marcado: el fijo se come 700 del primero → 700 + 300 + 200
   expect(mk(false).monthProjectedResult("m", "2026-04").resultado_pre_absorcion - mk(true).monthProjectedResult("m", "2026-04").resultado_pre_absorcion).toBe(-70000);
 });
+
+describe("D · un ingreso con la categoría de un budget es una devolución", () => {
+  const mk = (incomes: Record<string, unknown>, expenses: Record<string, unknown>, opts = CURRENT_OPTIONS) => new FinanceCore(fromDataset({
+    profile: { settings: { mainAccountId: "m", startMonth: "2026-02" } },
+    docs: {
+      accounts: { m: { name: "M", initialBalance: 0 }, o: { name: "O", initialBalance: 0 } }, categories: { g: { name: "Gasolina" }, x: { name: "Extra" } },
+      salaries: { s: { accountId: "m", grossMonthly: 3000, deductions: [], start: "2026-02-01", end: null, revisions: [], overtimes: [] } },
+      budgets: { b: { accountId: "m", categoryId: "g", amount: 250, start: "2026-02-01", end: null } },
+      movements: { ...incomes, ...expenses },
+    },
+  } as never, { cents: true }), "2026-04", "2026-02", opts);
+  const inc = (amount: number, categoryId = "g", accountId = "m") => ({ i: { type: "income", date: "2026-04-10", amount, accountId, categoryId } });
+  const exp = (amount: number) => ({ e: { type: "expense", date: "2026-04-03", amount, accountId: "m", categoryId: "g" } });
+
+  it("te pasas, te devuelven parte: el budget baja y el ingreso no cuenta dos veces", () => {
+    const c = mk(inc(100), exp(300));
+    expect(c.monthProjectedResult("m", "2026-04").resultado).toBe(300000 - 25000);   // neto 200 < 250: se reservan 250
+    expect(c.monthProjectedResult("m", "2026-04").budget_details[0]).toMatchObject({ income_offset: 10000, available: 5000 });
+    // Antes: +100 − 300 (el budget pasado reservaba lo gastado)
+    expect(mk(inc(100), exp(300), { ...CURRENT_OPTIONS, incomeOffsetsBudget: false }).monthProjectedResult("m", "2026-04").resultado).toBe(300000 + 10000 - 30000);
+  });
+  it("devolución antes de gastar: el previsto no salta cuando luego gastas", () => {
+    const before = mk(inc(100), {}).monthProjectedResult("m", "2026-04").resultado;
+    const after = mk(inc(100), exp(250)).monthProjectedResult("m", "2026-04").resultado;
+    expect(before).toBe(300000 - 25000);
+    expect(after).toBe(before);
+  });
+  it("saldo previsto del mes en curso: mismo criterio; el saldo real no cambia", () => {
+    const on = mk(inc(100), exp(300)), off = mk(inc(100), exp(300), { ...CURRENT_OPTIONS, incomeOffsetsBudget: false });
+    expect(on.realBalance("m", "2026-04")).toBe(off.realBalance("m", "2026-04"));
+    expect(on.projectedBalance("m", "2026-04").resultado).toBe(on.realBalance("m", "2026-04") - 5000);  // quedan 50 de budget
+    expect(on.monthRealResult("m", "2026-04")).toBe(off.monthRealResult("m", "2026-04"));
+  });
+  it("sin budget de esa categoría, o en otra cuenta: es un ingreso normal", () => {
+    expect(mk(inc(100, "x"), {}).budgetIncomeOffsets("2026-04", "m").size).toBe(0);
+    expect(mk(inc(100, "g", "o"), {}).budgetIncomeOffsets("2026-04", "m").size).toBe(0);
+  });
+});

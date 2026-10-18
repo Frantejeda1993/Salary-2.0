@@ -34,6 +34,7 @@ const steps: [string, Partial<EngineOptions>][] = [
   ["D3+A1 · gastos propios", { fixD3: true }],
   ["Céntimos enteros", { cents: true }],
   ["C · pagos de tarjeta por tarjeta (debe dar 0 cambios)", { perCardSettlement: true }],
+  ["D · ingresos con la categoría de un budget = devoluciones", { incomeOffsetsBudget: true }],
 ];
 
 // Nombres legibles para cuentas, salarios, budgets y categorías (solo en tu terminal).

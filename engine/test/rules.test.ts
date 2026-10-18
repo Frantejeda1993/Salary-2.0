@@ -82,7 +82,11 @@ describe("resultado proyectado", () => {
     budget(data, "food", 300);
     expense(data, "food", 100, 3);
     data.incomes = [{ id: "i1", account_id: MAIN, categoria_id: "food", monto: 40, fecha: d(2026, 3, 12) }];
-    expect(core(data, "2026-03").monthProjectedResult(MAIN, "2026-03").resultado).toBe(2000 + 40 - 300);
+    // App vieja: el ingreso suma aparte y el budget sigue reservando sus 300.
+    expect(new FinanceCore(toEngine(data), "2026-03", "2026-02", { ...EUROS, incomeOffsetsBudget: false })
+      .monthProjectedResult(MAIN, "2026-03").resultado).toBe(2000 + 40 - 300);
+    // Regla D: es una devolución de comida; neto 60 < 300, se reservan 300 y el ingreso no suma aparte.
+    expect(core(data, "2026-03").monthProjectedResult(MAIN, "2026-03").resultado).toBe(2000 - 300);
   });
 
   it("el déficit lo absorben los budgets con margen, en proporción, y se conserva el valor previo", () => {

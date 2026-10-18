@@ -347,10 +347,12 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
     <h2 className="title-sm">Budgets</h2>
     <div className="rows">
       {budgets.map((b) => {
-        const variable = core!.rawCategoryExpenses(month, b.accountId).get(b.categoryId as string) ?? 0;
         const pr = core!.monthProjectedResult(b.accountId!, month, b.accountId === mainAccountId ? carry : 0);
         const detail = pr.budget_details.find((d) => d.budget_id === b.id);
         const fx = detail?.fixed_in_budget ?? 0;
+        const refunds = detail?.income_offset ?? 0;
+        // Gasto variable neto de devoluciones (regla D).
+        const variable = (core!.rawCategoryExpenses(month, b.accountId).get(b.categoryId as string) ?? 0) - refunds;
         const used = variable + fx;
         const limit = detail?.presupuesto ?? b.amount;
         const absorbed = detail?.absorbed ?? 0;
@@ -374,7 +376,7 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
               <i className={`lvl-${budgetLevel(Math.max(0, used), limit)}`} style={{ width: `${pct * 100}%` }} />
               {pace && <u style={{ left: `${pace.elapsed * 100}%` }} title="Hoy" />}
             </div>
-            <p>{text}{fx ? ` Incluye ${formatCents(fx)} de ${fixedNames(b.categoryId as string, b.accountId)}.` : ""}{absorbed > 0 ? ` ${formatCents(absorbed)} de lo que queda cubre el déficit del mes.` : ""}</p>
+            <p>{text}{fx ? ` Incluye ${formatCents(fx)} de ${fixedNames(b.categoryId as string, b.accountId)}.` : ""}{refunds ? ` Descuenta ${formatCents(refunds)} de ingresos de esta categoría.` : ""}{absorbed > 0 ? ` ${formatCents(absorbed)} de lo que queda cubre el déficit del mes.` : ""}</p>
           </div>
         );
       })}
