@@ -163,7 +163,9 @@ def test_migrate_with_history(env, monkeypatch):
     from salary_migrate import history as H
     from fake_sheet import workbook
     monkeypatch.setattr(H, "load_tabs", lambda path: workbook())
-    mig = [*env["mig"], "--history", "fake.xlsx"]
+    xlsx = env["tmp"] / "fake.xlsx"
+    xlsx.write_bytes(b"")
+    mig = [*env["mig"], "--history", str(xlsx)]
     assert cli.main(mig) == 0
     docs = user_docs(env["tgt"])
     hist = {p: d for p, d in docs.items() if d.get("source") == "history"}
@@ -180,5 +182,14 @@ def test_history_that_does_not_add_up_writes_nothing(env, monkeypatch):
     tabs = workbook()
     tabs[0]._v.cells[(19, 8)] = 700.0       # el 'Total' de enero ya no es lo que suman sus partidas
     monkeypatch.setattr(H, "load_tabs", lambda path: tabs)
-    assert cli.main([*env["mig"], "--history", "fake.xlsx"]) == 2
+    xlsx = env["tmp"] / "fake.xlsx"
+    xlsx.write_bytes(b"")
+    assert cli.main([*env["mig"], "--history", str(xlsx)]) == 2
     assert env["tgt"].writes == 0
+
+
+def test_missing_excel_says_what_is_there(env):
+    (env["tmp"] / "Salary (1).xlsx").write_bytes(b"")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["history", "--xlsx", str(env["tmp"] / "Salary.xlsx"), "--reports-dir", str(env["tmp"])])
+    assert "Salary (1).xlsx" in str(e.value)
