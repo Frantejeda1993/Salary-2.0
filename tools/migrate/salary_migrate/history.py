@@ -489,11 +489,16 @@ class Remain:
     artifact: bool       # la hoja enseña hoy otro valor por TODAY()
 
 
-def remain_chain(tabs: list[Tab], until: str) -> list[Remain]:
+def remain_chain(tabs: list[Tab], until: str, remain_fix: dict | None = None,
+                 closing_fix: dict | None = None) -> list[Remain]:
+    """Remanente mes a mes como valía en su mes. `remain_fix` {mes: valor} corrige el «Remain last
+    month» de un mes; `closing_fix` {mes: valor} fija el cierre real de un mes (correcciones tuyas)."""
+    remain_fix, closing_fix = remain_fix or {}, closing_fix or {}
     by_name = {t.name: t for t in tabs}
     h_delta: dict = {}
     out: list[Remain] = []
     prev_total = None
+    prev_total_cached = None
     for t in [x for x in tabs if x.month <= until]:
         rpos = t.find("remain", cols=range(1, 2), exact=False) or t.find("remaing", cols=range(1, 2), exact=False)
         tpos = t.find("total", cols=range(7, 8))
@@ -503,10 +508,16 @@ def remain_chain(tabs: list[Tab], until: str) -> list[Remain]:
         intended = eval_formula(f, t, by_name, h_delta) if f else cached
         if intended is None:
             intended = cached
-        h_delta[t.name] = intended - cached
+        if not f and prev_total_cached is not None and cents(cached) == cents(prev_total_cached):
+            intended = prev_total  # valor copiado a mano del total anterior: arrastra lo que valía
+        if t.month in remain_fix:
+            intended = float(remain_fix[t.month])
         tc = t.v(tpos[0], 8) if tpos else 0.0
         tc = tc if is_num(tc) else 0.0
         ti = tc + (intended - cached)
+        if t.month in closing_fix:
+            ti = float(closing_fix[t.month])
+        h_delta[t.name] = ti - tc
         jump = 0.0 if prev_total is None else intended - prev_total
         ref_delta = 0.0
         m = re.search(r"'([^']+)'!\$?H\$?(\d+)", f or "")
@@ -516,7 +527,7 @@ def remain_chain(tabs: list[Tab], until: str) -> list[Remain]:
             if is_num(v):
                 ref_delta = v + h_delta.get(pt.name, 0.0) - prev_total
         out.append(Remain(t.month, ref_delta, cached, intended, f, tc, ti, jump, cents(intended) != cents(cached)))
-        prev_total = ti
+        prev_total, prev_total_cached = ti, tc
     return out
 
 
@@ -529,7 +540,6 @@ def remain_chain(tabs: list[Tab], until: str) -> list[Remain]:
 POOL, SAVINGS, MAMI, CASH = "pool", "ahorro", "mami", "efectivo"
 ROLES = (POOL, SAVINGS, MAMI, CASH)
 CARD = "card"
-SHEILA_FUEL = {"2024-12": (125.01, "Ingreso Sheila (mitad del combustible)")}
 
 
 @dataclass
@@ -551,6 +561,8 @@ class Mov:
 
 @dataclass
 class HistoryPlan:
+    closing: dict = field(default_factory=dict)
+    remains_raw: list = field(default_factory=list)   # sin tus correcciones (para separar causas)
     movs: list[Mov] = field(default_factory=list)
     initial: dict = field(default_factory=dict)
     remains: list[Remain] = field(default_factory=list)
@@ -597,7 +609,13 @@ def cash_in_total(t: Tab) -> float:
     return float(v) if is_num(v) else 0.0
 
 
-def build_plan(tabs: list[Tab], ex: Extraction, until: str) -> HistoryPlan:
+def build_plan(tabs: list[Tab], ex: Extraction, until: str, fixes: dict | None = None) -> HistoryPlan:
+    """`fixes`: correcciones tuyas, en un JSON fuera del repo (tienen datos reales):
+        {"items":   [{"month","type": income|expense|card|loan, "amount","description",
+                      "category"?, "date"?, "chargeMonth"? (tarjeta)}],
+         "remain":  {"2025-02": 4.38},                                   # «Remain last month» real
+         "closing": {"2025-01": {"amount": 4.38, "description": "…"}}}   # cierre real de un mes
+    """
     plan = HistoryPlan()
     M = plan.movs
     tabs = [t for t in tabs if t.month <= until]
@@ -608,11 +626,32 @@ def build_plan(tabs: list[Tab], ex: Extraction, until: str) -> HistoryPlan:
     card_paid: set = set()
     prev_prestado = 0.0
     prev_cash = 0.0
-    plan.remains = remain_chain(tabs, until)
+    fixes = fixes or {}
+    closing = {m: v["amount"] for m, v in (fixes.get("closing") or {}).items()}
+    plan.remains = remain_chain(tabs, until, fixes.get("remain"), closing)
+    plan.remains_raw = remain_chain(tabs, until)
+    plan.closing = fixes.get("closing") or {}
     rem = {r.month: r for r in plan.remains}
+    fix_items: dict = {}
+    for f in fixes.get("items") or []:
+        fix_items.setdefault(f["month"], []).append(f)
 
     for t in tabs:
         month, items = t.month, by_month.get(t.month, [])
+        for f in fix_items.get(month, []):
+            amt, desc, note = r2(float(f["amount"])), f.get("description", "Corrección"), "corrección tuya"
+            date_ = f.get("date") or f"{month}-01"
+            if f["type"] in ("income", "expense"):
+                M.append(Mov(f["type"], month, date_, amt, desc, POOL, category=f.get("category", "extra"), note=note))
+            elif f["type"] == "card":
+                charge = f.get("chargeMonth") or add_months(month, 1)
+                M.append(Mov("expense", month, date_, amt, desc, POOL, category=f.get("category", "extra"), note=note,
+                             card={"cardId": CARD, "chargeMonth": charge, "reserveIn": "charge"}))
+                card_groups[charge] = card_groups.get(charge, 0.0) + amt
+            elif f["type"] == "loan":
+                _transfer(M, month, date_, amt, desc, MAMI, POOL, "", kind="loan", note=note)
+            else:
+                raise ValueError(f"Corrección con tipo desconocido: {f['type']!r}")
         has_cash_list = any(i.section == "cash" for i in items)
         extras_atm = [i for i in items if i.section == "extras" and i.counted and i.text.lower().startswith("atm")]
         r = rem[month]
@@ -699,10 +738,6 @@ def build_plan(tabs: list[Tab], ex: Extraction, until: str) -> HistoryPlan:
                     _transfer(M, month, f"{month}-01", -amt, "Desde ahorros", SAVINGS, POOL, it.cell)
                 else:
                     _add(M, it, POOL, "extra")
-        if month in SHEILA_FUEL:
-            amt, desc = SHEILA_FUEL[month]
-            M.append(Mov("income", month, f"{month}-31" if month.endswith("12") else f"{month}-28", amt, desc, POOL,
-                         category="gasolina", note="la hoja contaba la mitad del combustible"))
         cash = cash_in_total(t)
         prev_cash = cash
         if cents(cash):
@@ -761,7 +796,13 @@ def _reconcile(plan: HistoryPlan, tabs: list[Tab]):
     for t, r in zip(tabs, plan.remains):
         bal += flows(plan.movs, POOL, t.month)
         gap = cents(r.total_intended) - cents(bal)
-        if gap and abs(gap) <= 3:
+        if gap and t.month in plan.closing:
+            # Cierre real que conoces: la diferencia con lo apuntado son gastos (o ingresos) sin apuntar.
+            plan.movs.append(Mov("income" if gap > 0 else "expense", t.month, last_day(t.month), abs(gap) / 100,
+                                 plan.closing[t.month].get("description", "Sin apuntar"), POOL, category="extra",
+                                 note=f"corrección tuya: el mes cerró con {plan.closing[t.month]['amount']:.2f}"))
+            bal += gap / 100
+        elif gap and abs(gap) <= 3:
             # La hoja guarda fracciones de céntimo (28,535 €); la app, céntimos.
             plan.movs.append(Mov("income" if gap > 0 else "expense", t.month, last_day(t.month), abs(gap) / 100,
                                  "Redondeo de céntimos", POOL, category="ajuste", note="la hoja usa fracciones de céntimo"))
@@ -852,11 +893,20 @@ def report_lines(ex: Extraction, plan: HistoryPlan) -> list[str]:
     for c in rc:
         if not c.ok:
             L.append(f"   ✖ {c.tab}: hoja {c.sheet} · cuenta Excel {c.ours}")
-    arts = [r for r in plan.remains if r.artifact]
+    arts = [r for r in (plan.remains_raw or plan.remains) if r.artifact]
     if arts:
         L.append("Remanentes que tu hoja enseña HOY con otro valor por usar TODAY() en la fórmula:")
         for r in arts:
             L.append(f"   · {r.month}: hoy {r.cached:.2f}, en su mes {r.intended:.2f}")
+    raw = {r.month: r for r in plan.remains_raw}
+    moved = [(r, raw[r.month]) for r in plan.remains if r.month in raw and cents(r.total_intended) != cents(raw[r.month].total_intended)]
+    if moved:
+        L.append("Tus correcciones cambian el cierre de estos meses (respecto a la hoja):")
+        for r, r0 in moved:
+            L.append(f"   · {r.month}: hoja {r0.total_intended:.2f} → {r.total_intended:.2f}")
+    fixed = [m for m in plan.movs if (m.note or "").startswith("corrección tuya")]
+    for m in fixed:
+        L.append(f"   + {m.month} {m.kind} {m.amount:.2f} {m.description}")
     aj = [m for m in plan.movs if m.category == "ajuste"]
     L.append(f"Ajustes: {len(aj)} (total {sum(m.amount if m.kind == 'income' else -m.amount for m in aj):+.2f} €)")
     for m in aj:

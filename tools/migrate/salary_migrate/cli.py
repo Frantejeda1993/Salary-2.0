@@ -193,7 +193,7 @@ def _add_history(args, plan) -> bool:
     from . import history as H
     tabs = H.load_tabs(Path(args.history).expanduser())
     ex = H.extract(tabs, args.history_until)
-    hp = H.build_plan(tabs, ex, args.history_until)
+    hp = H.build_plan(tabs, ex, args.history_until, _load_fixes(args.history_fixes))
     print(f"\nHistórico ({Path(args.history).name}, hasta {args.history_until}):")
     for line in H.report_lines(ex, hp):
         print("   " + line)
@@ -205,6 +205,16 @@ def _add_history(args, plan) -> bool:
             return False
         plan.docs[coll].update(items)
     return all(c.ok for c in ex.checks) and all(c.ok for c in hp.checks)
+
+
+def _load_fixes(path: str | None) -> dict | None:
+    """Correcciones al histórico (JSON fuera del repo: tiene datos reales)."""
+    if not path:
+        return None
+    p = Path(path).expanduser()
+    if not p.exists():
+        raise SystemExit(f"No encuentro el fichero de correcciones {p}.")
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 def _is_history(doc: dict) -> bool:
@@ -263,7 +273,7 @@ def cmd_history(args) -> int:
     _check_month(args.until, "--until")
     tabs = H.load_tabs(Path(args.xlsx).expanduser())
     ex = H.extract(tabs, args.until)
-    hp = H.build_plan(tabs, ex, args.until)
+    hp = H.build_plan(tabs, ex, args.until, _load_fixes(args.fixes))
     for line in H.report_lines(ex, hp):
         print(line)
     out = Path(args.reports_dir)
@@ -427,11 +437,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--current-month", help="Mes actual para la verificación (por defecto, hoy en Madrid)")
     sp.add_argument("--history", help="Excel del histórico anterior a la app (se carga en cuentas archivadas)")
     sp.add_argument("--history-until", default="2026-02", help="Último mes del Excel que se importa")
+    sp.add_argument("--history-fixes", help="JSON con tus correcciones al histórico (fuera del repo)")
     sp.set_defaults(func=cmd_migrate)
 
     sp = sub.add_parser("history", help="Histórico del Excel: informe de cuadre, sin escribir nada")
     sp.add_argument("--xlsx", required=True)
     sp.add_argument("--until", default="2026-02")
+    sp.add_argument("--fixes", help="JSON con tus correcciones al histórico (fuera del repo)")
     sp.add_argument("--reports-dir", default=str(WORKDIR / "reports"))
     sp.set_defaults(func=cmd_history)
 

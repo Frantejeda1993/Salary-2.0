@@ -137,3 +137,30 @@ def test_history_never_changes_the_app_figures(FinanceCore, legacy_path):
     inv = history_invariant(p.profile, p.docs, hist, engine_path=legacy_path, current_month="2026-06",
                             min_month="2026-02", until="2026-02")
     assert inv["compared"] > 500 and inv["mismatches"] == []
+
+
+def test_your_corrections():
+    """Un mes perdido: cierre real conocido, compras con tarjeta sin detalle y un préstamo."""
+    tabs = workbook()
+    fixes = {
+        "items": [
+            {"month": "2026-01", "type": "card", "amount": 40, "chargeMonth": "2026-02", "description": "Tarjeta del viaje"},
+            {"month": "2026-01", "type": "loan", "amount": 20, "description": "Préstamo de Mami"},
+            {"month": "2026-01", "type": "income", "amount": 5, "category": "gasolina", "description": "Mitad del combustible"},
+        ],
+        "closing": {"2026-01": {"amount": 700, "description": "Gastos sin apuntar"}},
+        "remain": {"2026-02": 700},
+    }
+    # Febrero arrastra a mano el total de enero menos el efectivo: con la corrección arrastra 700.
+    plan = H.build_plan(tabs, H.extract(tabs, "2026-02"), "2026-02", fixes)
+    assert all(c.ok for c in plan.checks), plan.checks
+    assert [c.ours for c in plan.checks] == [700.0, 700.0 + 1594.5 - 764.5]
+    # Enero: 799,5 (hoja) + 20 (préstamo) + 5 (ingreso) − X = 700  →  X = 124,5 sin apuntar
+    sin = [m for m in plan.movs if m.description == "Gastos sin apuntar"]
+    assert [(m.kind, m.amount) for m in sin] == [("expense", 124.5)]
+    # La tarjeta del viaje se cobra con la fila 'Tarjeta' de febrero junto a la cena (30 + 40 ≠ 30: aviso).
+    assert [m.amount for m in plan.movs if m.kind == "settlement"] == [30.0]
+    assert plan.warnings and "70.00" in plan.warnings[0]
+    # Sin ajuste en febrero: el arrastre ya es el cierre corregido.
+    assert not [m for m in plan.movs if m.category == "ajuste"]
+    assert any("2026-01: hoja 799.50 → 700.00" in line for line in H.report_lines(H.extract(tabs, "2026-02"), plan))

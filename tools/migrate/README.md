@@ -229,12 +229,30 @@ de la hoja, al céntimo; si algún mes no cuadra, no se escribe nada.
 
 El Excel tiene datos reales: déjalo **fuera del repo** (por ejemplo en `~/salary-migration/`).
 
+**Correcciones** (meses que la hoja no recoge bien) en un JSON también fuera del repo,
+por ejemplo `~/salary-migration/history-fixes.json` (importes inventados):
+
+```json
+{
+  "items": [
+    {"month": "2025-01", "type": "card", "amount": 100.0, "chargeMonth": "2025-02", "description": "Tarjeta sin detalle"},
+    {"month": "2025-01", "type": "loan", "amount": 50.0, "description": "Préstamo de Mami"},
+    {"month": "2024-12", "type": "income", "amount": 10.0, "category": "gasolina", "description": "Mitad del combustible"}
+  ],
+  "closing": {"2025-01": {"amount": 4.0, "description": "Gastos sin apuntar"}},
+  "remain": {"2025-02": 4.0}
+}
+```
+
+`closing` fija cómo cerró un mes de verdad (la diferencia con lo apuntado entra como gasto
+con esa descripción) y `remain` corrige el «Remain last month» de un mes.
+
 ```powershell
 # Solo informe: cuadre mes a mes y CSV de movimientos en ~/salary-migration/reports (no escribe nada)
-python -m salary_migrate history --xlsx ~/salary-migration/Salary.xlsx
+python -m salary_migrate history --xlsx ~/salary-migration/Salary.xlsx --fixes ~/salary-migration/history-fixes.json
 
 # En la migración: se añade al resto con --history
-python -m salary_migrate migrate --source-key ~/.salary-keys/old-readonly.json --target-key ~/.salary-keys/salary2-admin.json --uid TU_UID --min-month 2026-02 --engine-path C:\dev\salary-legacy --own-expenses-from 2026-05 --refund-transfers 3GbJnIHk --history ~/salary-migration/Salary.xlsx --dry-run
+python -m salary_migrate migrate --source-key ~/.salary-keys/old-readonly.json --target-key ~/.salary-keys/salary2-admin.json --uid TU_UID --min-month 2026-02 --engine-path C:\dev\salary-legacy --own-expenses-from 2026-05 --refund-transfers 3GbJnIHk --history ~/salary-migration/Salary.xlsx --history-fixes ~/salary-migration/history-fixes.json --dry-run
 ```
 
 ## 5. Valores de referencia (Fase 3)
