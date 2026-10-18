@@ -150,6 +150,10 @@ def cmd_migrate(args) -> int:
         _save_report(Path(args.reports_dir), "migrate-blocked", {"errors": plan.errors, "warnings": plan.warnings})
         print("\nNo se ha escrito nada.")
         return 2
+    if args.history:
+        if not _add_history(args, plan):
+            print("\nEl histórico no cuadra con la hoja: no se ha escrito nada.")
+            return 2
 
     target = Target(CLIENT_FACTORY(args.target_key, args.target_database), tgt_pid, args.uid)
     print(f"\nDestino: proyecto {tgt_pid}, users/{args.uid}")
@@ -184,14 +188,52 @@ def cmd_migrate(args) -> int:
     return _verify_and_report(args, target, legacy)
 
 
+def _add_history(args, plan) -> bool:
+    """Añade al plan el histórico del Excel (opción A: cuentas archivadas propias)."""
+    from . import history as H
+    tabs = H.load_tabs(Path(args.history).expanduser())
+    ex = H.extract(tabs, args.history_until)
+    hp = H.build_plan(tabs, ex, args.history_until)
+    print(f"\nHistórico ({Path(args.history).name}, hasta {args.history_until}):")
+    for line in H.report_lines(ex, hp):
+        print("   " + line)
+    docs = H.history_docs(hp, plan.docs["categories"])
+    for coll, items in docs.items():
+        clash = set(items) & set(plan.docs[coll])
+        if clash:
+            print(f"   ✖ ids repetidos en {coll}: {sorted(clash)[:3]}")
+            return False
+        plan.docs[coll].update(items)
+    return all(c.ok for c in ex.checks) and all(c.ok for c in hp.checks)
+
+
+def _is_history(doc: dict) -> bool:
+    return doc.get("source") == "history"
+
+
 def _verify_and_report(args, target: Target, legacy: dict) -> int:
     current = args.current_month or current_month_madrid()
     print(f"\nVerificando (mes actual {current})…")
     docs, profile = target.read_docs(), target.read_profile() or {}
-    # Solo se verifica lo migrado: lo creado en la app nueva no está en el origen.
-    docs = {c: {i: d for i, d in v.items() if d.get("_migration")} for c, v in docs.items()}
+    # Solo se verifica lo migrado: lo creado en la app nueva no está en el origen, y el
+    # histórico del Excel tampoco (se comprueba aparte: no puede cambiar ninguna cifra).
+    migrated = {c: {i: d for i, d in v.items() if d.get("_migration")} for c, v in docs.items()}
+    hist = {c: {i: d for i, d in v.items() if _is_history(d)} for c, v in migrated.items()}
+    docs = {c: {i: d for i, d in v.items() if not _is_history(d)} for c, v in migrated.items()}
     report = verify(legacy, profile, docs, engine_path=args.engine_path,
                     current_month=current, min_month=args.min_month)
+    if any(hist.values()) and args.engine_path:
+        from .verify import history_invariant
+        inv = history_invariant(profile, docs, hist, engine_path=args.engine_path, current_month=current,
+                                min_month=args.min_month, until=getattr(args, "history_until", None) or "2026-02")
+        report["history"] = inv
+        n = sum(len(v) for v in hist.values())
+        print(f"   {'✔' if not inv['mismatches'] else '✖'} histórico ({n} documentos) no cambia ninguna cifra de la app: "
+              f"{inv['compared']} cifras comparadas, {len(inv['mismatches'])} distintas")
+        for m in inv["mismatches"][:10]:
+            print(f"       {m}")
+        if inv["mismatches"]:
+            report["ok"] = False
     for k, v in report["counts"].items():
         mark = "✔" if v["source"] == v["target"] else "✖"
         print(f"   {mark} {k:<22} origen {v['source']:>6}   destino {v['target']:>6}")
@@ -212,6 +254,31 @@ def _verify_and_report(args, target: Target, legacy: dict) -> int:
     print(f"\nInforme: {p}")
     print("\nVERIFICACIÓN OK" if report["ok"] else "\nVERIFICACIÓN FALLIDA")
     return 0 if report["ok"] else 1
+
+
+def cmd_history(args) -> int:
+    """Solo lectura del Excel: cuadre y lista de movimientos (CSV fuera del repo)."""
+    import csv
+    from . import history as H
+    _check_month(args.until, "--until")
+    tabs = H.load_tabs(Path(args.xlsx).expanduser())
+    ex = H.extract(tabs, args.until)
+    hp = H.build_plan(tabs, ex, args.until)
+    for line in H.report_lines(ex, hp):
+        print(line)
+    out = Path(args.reports_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"history-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.csv"
+    with path.open("w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["mes", "fecha", "tipo", "importe", "descripción", "cuenta", "hacia", "categoría", "celda", "nota"])
+        for m in hp.movs:
+            w.writerow([m.month, m.date, m.kind, f"{m.amount:.2f}".replace(".", ","), m.description, m.account,
+                        m.to or "", m.category or "", m.cell, m.note or ""])
+    print(f"\nMovimientos: {path}")
+    ok = all(c.ok for c in ex.checks) and all(c.ok for c in hp.checks)
+    print("\nCUADRA" if ok else "\nNO CUADRA")
+    return 0 if ok else 1
 
 
 def cmd_verify(args) -> int:
@@ -358,7 +425,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--own-expenses-from", help="Mes desde el que los reembolsos de gastos propios se hacen en la app")
     sp.add_argument("--refund-transfers", help="Ids (o prefijos de 8) de transferencias que fueron reembolsos, separados por comas")
     sp.add_argument("--current-month", help="Mes actual para la verificación (por defecto, hoy en Madrid)")
+    sp.add_argument("--history", help="Excel del histórico anterior a la app (se carga en cuentas archivadas)")
+    sp.add_argument("--history-until", default="2026-02", help="Último mes del Excel que se importa")
     sp.set_defaults(func=cmd_migrate)
+
+    sp = sub.add_parser("history", help="Histórico del Excel: informe de cuadre, sin escribir nada")
+    sp.add_argument("--xlsx", required=True)
+    sp.add_argument("--until", default="2026-02")
+    sp.add_argument("--reports-dir", default=str(WORKDIR / "reports"))
+    sp.set_defaults(func=cmd_history)
 
     sp = sub.add_parser("verify", help="Verificar destino contra un backup")
     common(sp, target=True)

@@ -42,11 +42,15 @@ export default function MonthPage() {
 
   const tz = profile?.settings?.timezone || "Europe/Madrid";
   const today = todayIn(tz);
-  const startMonth = profile!.settings.startMonth;
+  const hist = historyRange(docs.movements as Record<string, Raw>);
+  const startMonth = hist && hist.first < profile!.settings.startMonth ? hist.first : profile!.settings.startMonth;
   const lastMonth = addMonths(currentMonth, MONTHS_AHEAD);
   const asked = params.get("mes");
   const month: Month = asked && /^\d{4}-\d{2}$/.test(asked) && asked >= startMonth && asked <= lastMonth ? asked : currentMonth;
   const go = (m: Month) => setParams(m === currentMonth ? {} : { mes: m }, { replace: true });
+  if (hist && month <= hist.last && month < currentMonth) {
+    return <HistoryMonth month={month} first={startMonth} last={lastMonth} go={go} />;
+  }
 
   const phase = month < currentMonth ? "past" : month === currentMonth ? "current" : "future";
   const s = core.monthSummary(month);
@@ -348,5 +352,71 @@ function Trend({ month }: { month: Month }) {
         ))}
       </div>
     </details>
+  );
+}
+
+// ------------------------------------------------------------------------- histórico del Excel
+
+const HIST_POOL = "hist_excel";
+
+/** Meses con movimientos importados del Excel (source 'history'), o null si no hay. */
+function historyRange(movements: Record<string, Raw>): { first: Month; last: Month } | null {
+  let first: Month | null = null;
+  let last: Month | null = null;
+  for (const m of Object.values(movements)) {
+    if (m.source !== "history") continue;
+    const mo = monthOf(m.date as string);
+    if (!first || mo < first) first = mo;
+    if (!last || mo > last) last = mo;
+  }
+  return first && last ? { first, last } : null;
+}
+
+/**
+ * Un mes anterior a la app: lo que hiciste según tu Excel. El saldo de la cuenta «Excel» al
+ * cierre es tu remanente de ese mes; el resultado, lo que cambió en el mes.
+ */
+function HistoryMonth({ month, first, last, go }: { month: Month; first: Month; last: Month; go: (m: Month) => void }) {
+  const { core, docs } = useData();
+  const result = core!.monthRealResult(HIST_POOL, month);
+  const closing = core!.realBalance(HIST_POOL, month);
+  const items = Object.values(docs.movements).filter((m) => m.source === "history" && monthOf(m.date as string) === month);
+  const byCat = new Map<string, number>();
+  let income = 0;
+  for (const m of items) {
+    const cents = Math.round((m.amount as number) * 100);
+    if (m.type === "income" && m.accountId === HIST_POOL) income += cents;
+    if (m.type === "expense" && m.accountId === HIST_POOL) {
+      const cat = nameOf(docs.categories, m.categoryId as string, "Sin categoría");
+      byCat.set(cat, (byCat.get(cat) ?? 0) + cents);
+    }
+  }
+  const spent = [...byCat.values()].reduce((a, b) => a + b, 0);
+  return (
+    <div className="page month">
+      <div className="month-switch">
+        <button onClick={() => go(addMonths(month, -1))} disabled={month <= first} aria-label="Mes anterior"><IconPrev /></button>
+        <h1>{monthLong(month)}<small>Antes de la app, desde tu Excel</small></h1>
+        <button onClick={() => go(addMonths(month, 1))} disabled={month >= last} aria-label="Mes siguiente"><IconNext /></button>
+      </div>
+      <section className="closing" aria-label="Remanente del mes">
+        <div className="label">Remanente al cierre</div>
+        <div className={`figure ${closing < 0 ? "neg" : ""}`}>{formatCents(closing)}</div>
+        <p className="muted small">Resultado del mes {formatCents(result)}. Es el «Total» de costes variables de tu hoja.</p>
+      </section>
+      <div className="figures">
+        <div><span>Ingresos</span><strong>{formatCents(income)}</strong></div>
+        <div><span>Gastos</span><strong>{formatCents(spent)}</strong></div>
+        <div><span>Movimientos</span><strong>{items.length}</strong></div>
+      </div>
+      <h2 className="title-sm">Gastos por categoría</h2>
+      <ul className="rows">
+        {[...byCat].sort((a, b) => b[1] - a[1]).map(([cat, v]) => (
+          <li key={cat}><span className="what"><b>{cat}</b></span><span className="amt">{formatCents(v)}</span></li>
+        ))}
+        {byCat.size === 0 && <li className="empty">Sin gastos este mes.</li>}
+      </ul>
+      <p className="muted small">El detalle está en Movimientos. Los ajustes («Ajuste del remanente») son cambios que hiciste a mano en la hoja.</p>
+    </div>
   );
 }

@@ -155,3 +155,30 @@ def test_backup_is_tamper_evident(env):
     b.write_text(b.read_text().replace('"monto": ', '"monto": 1', 1))
     with pytest.raises(ValueError):
         read_backup(b)
+
+
+def test_migrate_with_history(env, monkeypatch):
+    """--history añade el Excel en cuentas archivadas; la verificación sigue exacta y además
+    comprueba que el histórico no cambia ninguna cifra. Repetirlo no cambia nada."""
+    from salary_migrate import history as H
+    from fake_sheet import workbook
+    monkeypatch.setattr(H, "load_tabs", lambda path: workbook())
+    mig = [*env["mig"], "--history", "fake.xlsx"]
+    assert cli.main(mig) == 0
+    docs = user_docs(env["tgt"])
+    hist = {p: d for p, d in docs.items() if d.get("source") == "history"}
+    assert hist and all("/hist_" in p for p in hist)
+    assert env["tgt"].docs[f"users/{UID}/meta/migration"]["verified"] is True
+    n = env["tgt"].writes
+    assert cli.main(mig) == 0
+    assert user_docs(env["tgt"]) == docs and env["tgt"].writes - n == 2
+
+
+def test_history_that_does_not_add_up_writes_nothing(env, monkeypatch):
+    from salary_migrate import history as H
+    from fake_sheet import workbook
+    tabs = workbook()
+    tabs[0]._v.cells[(19, 8)] = 700.0       # el 'Total' de enero ya no es lo que suman sus partidas
+    monkeypatch.setattr(H, "load_tabs", lambda path: tabs)
+    assert cli.main([*env["mig"], "--history", "fake.xlsx"]) == 2
+    assert env["tgt"].writes == 0

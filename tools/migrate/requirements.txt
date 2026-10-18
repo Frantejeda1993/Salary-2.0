@@ -3,3 +3,4 @@ google-cloud-firestore==2.34.0
 python-dateutil==2.9.0.post0
 tzdata  # zona horaria Europe/Madrid también en Windows
 pytest==8.*
+openpyxl==3.1.5  # leer el Excel del histórico

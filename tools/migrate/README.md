@@ -213,6 +213,30 @@ Mismo comando con tu **uid real** (lo mostrará la app nueva en tu perfil tras
 el primer login con Google) y `--prune`, para que el destino sea un espejo exacto
 del origen. Antes, deja de usar la app vieja para que no entren datos durante la copia.
 
+## 4 bis. Histórico anterior a la app (Excel mensual)
+
+El Excel de nov-2023 a feb-2026 se importa en **cuentas archivadas propias**
+(«Excel (hasta feb-2026)», «Excel: ahorros», «Excel: Mami», «Excel: efectivo»).
+Ninguna cuenta real cambia: la verificación comprueba que, con y sin histórico,
+todas las cifras de la app son idénticas.
+
+Reglas: solo es gasto lo que suma la fórmula del total de cada lista (el resto son
+registros de km); el efectivo que la hoja suma al total se modela como transferencia;
+los cambios a mano en «Remain last month» entran como «Ajuste del remanente» con la
+fórmula original en la nota; las fórmulas con `TODAY()` se evalúan como en su mes.
+El saldo de la cuenta «Excel» al cierre de cada mes es el «Total» de costes variables
+de la hoja, al céntimo; si algún mes no cuadra, no se escribe nada.
+
+El Excel tiene datos reales: déjalo **fuera del repo** (por ejemplo en `~/salary-migration/`).
+
+```powershell
+# Solo informe: cuadre mes a mes y CSV de movimientos en ~/salary-migration/reports (no escribe nada)
+python -m salary_migrate history --xlsx ~/salary-migration/Salary.xlsx
+
+# En la migración: se añade al resto con --history
+python -m salary_migrate migrate --source-key ~/.salary-keys/old-readonly.json --target-key ~/.salary-keys/salary2-admin.json --uid TU_UID --min-month 2026-02 --engine-path C:\dev\salary-legacy --own-expenses-from 2026-05 --refund-transfers 3GbJnIHk --history ~/salary-migration/Salary.xlsx --dry-run
+```
+
 ## 5. Valores de referencia (Fase 3)
 
 Ejecuta el motor de la app vieja sobre tu último backup y guarda todas sus

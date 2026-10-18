@@ -247,3 +247,31 @@ def verify(legacy: dict, profile: dict, docs: dict, *, engine_path: str | None,
     else:
         report["engine"] = None
     return report
+
+
+def history_invariant(profile: dict, base: dict, hist: dict, *, engine_path: str, current_month: str,
+                      min_month: str, until: str) -> dict:
+    """El histórico vive en cuentas archivadas propias: con o sin él, toda cifra de las cuentas
+    reales y todo resumen desde el primer mes de la app tiene que ser idéntico."""
+    FinanceCore = load_engine(engine_path)
+    merged = {c: {**base.get(c, {}), **hist.get(c, {})} for c in set(base) | set(hist)}
+    a, b = to_legacy(profile, base), to_legacy(profile, merged)
+    start = profile.get("settings", {}).get("startMonth") or min_month
+    months = _months(FinanceCore(a, current_month, start), start, current_month)
+    ma = engine_metrics(FinanceCore, a, current_month, start, months)
+    mb = engine_metrics(FinanceCore, b, current_month, start, months)
+    hist_accounts = set(hist.get("accounts", {}))
+    mismatches, compared = [], 0
+    for k, v in ma.items():
+        month = k.split("|", 1)[0]
+        # Los resúmenes de los meses del histórico cambian por definición (suman sus gastos).
+        if "|summary|" in k and month <= until:
+            continue
+        compared += 1
+        w = mb.get(k)
+        if w is None or abs(v - w) > TOLERANCE:
+            mismatches.append(f"{k}: sin histórico {v} · con histórico {w}")
+    extra = [k for k in mb if k not in ma and not any(f"|{h}|" in k for h in hist_accounts)
+             and not (("|summary|" in k or "|pending|" in k) and k.split("|", 1)[0] <= until)]
+    mismatches += [f"{k}: aparece solo con el histórico" for k in extra]
+    return {"compared": compared, "mismatches": mismatches}
