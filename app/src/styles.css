@@ -197,7 +197,9 @@ em { font-style: normal; color: var(--ink-2); font-weight: 400; }
 
 .figures { display: grid; grid-template-columns: repeat(3, 1fr); margin: 20px 0 4px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .figures div { padding: 10px 0; display: flex; flex-direction: column; }
-.figures div + div { border-left: 1px solid var(--rule); padding-left: 12px; }
+.figures > div + div { border-left: 1px solid var(--rule); padding-left: 12px; }
+.figures > div:nth-child(3n+1) { border-left: 0; padding-left: 0; }
+.figures > div:nth-child(n+4) { border-top: 1px solid var(--rule); }
 .figures span { font-size: 13px; color: var(--ink-2); }
 .figures strong { font-size: 17px; font-weight: 600; }
 
@@ -359,3 +361,19 @@ details.edit-section .btn + .btn { margin-top: 8px; }
 .quiet-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 22px; padding-top: 8px; border-top: 1px dashed var(--rule); }
 .form-title { font-size: 18px; font-weight: 600; margin: 4px 0 10px; }
 .form-actions { display: grid; gap: 8px; margin-top: 16px; }
+
+/* Búsqueda y filtros de Movimientos */
+.search-row { display: flex; gap: 8px; align-items: center; margin: 4px 0 8px; }
+.search-row .search { flex: 1; min-width: 0; margin: 0; }
+.filter-btn { flex-shrink: 0; min-height: 44px; }
+.filter-btn.on { color: var(--tint-movimientos); border-color: var(--tint-movimientos); }
+.filters { display: grid; gap: 10px; padding: 12px 14px; margin-bottom: 8px; border-radius: 14px;
+  background: color-mix(in srgb, var(--tint-movimientos) 6%, var(--sheet)); border: 1px solid color-mix(in srgb, var(--tint-movimientos) 20%, var(--rule)); }
+.filters .field { margin: 0; }
+.filters .link { justify-self: start; }
+.date-range { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.filters { grid-template-columns: minmax(0, 1fr); }
+.filters .input { width: 100%; min-width: 0; box-sizing: border-box; }
+.range-summary { margin: 6px 0 8px; text-align: center; }
+.range-summary b { display: block; font-size: 16px; font-weight: 600; }
+.range-summary small { color: var(--ink-2); font-size: 12px; }

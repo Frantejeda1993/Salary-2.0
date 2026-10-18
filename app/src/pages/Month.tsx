@@ -153,6 +153,10 @@ export default function MonthPage() {
       ? { label: "Real hoy", value: real }
       : { label: `Cierre previsto de ${monthName(month)}`, value: proj };
   const hasLoans = impact.debes !== 0 || impact.te_deben !== 0;
+  // Tarjeta que se cobra este mes en la cuenta principal (compras del mes anterior), aún sin saldar.
+  const cardDue = core.creditGroups().filter((g) => g.mes_cargo === month && g.settlement === null && g.account_id === main);
+  const cardDueCents = pySum(cardDue.map((g) => g.total));
+  const cardDueNames = [...new Set(cardDue.map((g) => nameOf(docs.cards, g.card_id ?? `card_${g.account_id}`, "Tarjeta")))].join(", ");
   const loanDetail = [impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : ""]
     .filter(Boolean).join(", ");
 
@@ -191,9 +195,12 @@ export default function MonthPage() {
 
       <div className="figures">
         {phase === "future" ? <>
-          <div><span>Empiezas con</span><strong>{formatCents(s.remaining_from_previous_month)}</strong></div>
+          {hasLoans && <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>}
+          <div><span>Empiezas con</span><strong className={s.remaining_from_previous_month < 0 ? "neg" : ""}>{formatCents(s.remaining_from_previous_month)}</strong></div>
+          <div className="loan-fig"><span>Tarjeta a pagar</span><strong>{formatCents(cardDueCents)}</strong><small>{cardDueCents ? `Compras de ${monthName(addMonths(month, -1))}${cardDueNames ? ` (${cardDueNames})` : ""}` : `Sin compras de ${monthName(addMonths(month, -1))}`}</small></div>
           <div><span>Nómina</span><strong>{formatCents(s.ingreso_total)}</strong></div>
           <div><span>Fijos</span><strong>{formatCents(s.gastos_fijos)}</strong></div>
+          <div><span>Budgets</span><strong>{formatCents(s.presupuestos)}</strong></div>
         </> : <>
           {phase === "current" && hasLoans
             ? <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>
