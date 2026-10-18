@@ -33,6 +33,7 @@ const steps: [string, Partial<EngineOptions>][] = [
   ["B1 · saldo proyectado de meses futuros", { fixB1: true }],
   ["D3+A1 · gastos propios", { fixD3: true }],
   ["Céntimos enteros", { cents: true }],
+  ["C · pagos de tarjeta por tarjeta (debe dar 0 cambios)", { perCardSettlement: true }],
 ];
 
 // Nombres legibles para cuentas, salarios, budgets y categorías (solo en tu terminal).

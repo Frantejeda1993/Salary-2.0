@@ -27,10 +27,12 @@ export interface EngineOptions {
   fixD3: boolean;
   /** Cálculo en céntimos enteros: los datos deben venir en céntimos (fromDataset(ds, { cents: true })). */
   cents: boolean;
+  /** C: los pagos de tarjeta se agrupan por tarjeta y mes de cargo (antes, por cuenta y mes). */
+  perCardSettlement?: boolean;
 }
 
-export const LEGACY_OPTIONS: EngineOptions = Object.freeze({ fixB6: false, fixB1: false, fixD3: false, cents: false });
-export const CURRENT_OPTIONS: EngineOptions = Object.freeze({ fixB6: true, fixB1: true, fixD3: true, cents: true });
+export const LEGACY_OPTIONS: EngineOptions = Object.freeze({ fixB6: false, fixB1: false, fixD3: false, cents: false, perCardSettlement: false });
+export const CURRENT_OPTIONS: EngineOptions = Object.freeze({ fixB6: true, fixB1: true, fixD3: true, cents: true, perCardSettlement: true });
 
 /** Redondeo al entero más cercano, mitades hacia fuera (como una nómina), tolerante al ruido binario. */
 export function roundHalfUp(v: number): number {
@@ -68,7 +70,7 @@ export function accrualMonth(e: EExpense): Month {
 
 type FixedLike = EngineData["fixedExpenses"][number];
 
-function feFieldForMonth<K extends "amount" | "accountId">(fe: FixedLike, field: K, month: Month): FixedLike[K] {
+function feFieldForMonth<K extends "amount" | "accountId" | "isOwn">(fe: FixedLike, field: K, month: Month): FixedLike[K] {
   let value = fe[field];
   const revs = [...fe.revisions].sort((a, b) => cmp(a.from, b.from));
   for (const rev of revs) {
@@ -80,6 +82,17 @@ function feFieldForMonth<K extends "amount" | "accountId">(fe: FixedLike, field:
 
 export const fixedAmountForMonth = (fe: FixedLike, month: Month) => feFieldForMonth(fe, "amount", month) ?? 0;
 export const fixedAccountForMonth = (fe: FixedLike, month: Month) => feFieldForMonth(fe, "accountId", month);
+/** B: «gasto propio» vigente en un mes. */
+export const fixedIsOwnForMonth = (fe: FixedLike, month: Month) => !!feFieldForMonth(fe, "isOwn", month);
+
+/** A: deducciones vigentes en un mes (la última revisión con from <= mes; si no hay, las de base). */
+export function deductionsForMonth(salary: ESalary, month: Month): ESalary["deductions"] {
+  let deds = salary.deductions;
+  for (const r of [...(salary.deductionRevisions ?? [])].sort((a, b) => cmp(a.from, b.from))) {
+    if (r.from <= month) deds = r.deductions;
+  }
+  return deds;
+}
 
 const active = (item: { start: IsoDate; end: IsoDate | null }, month: Month) => isActiveInMonth(item.start, item.end, month);
 
@@ -128,7 +141,11 @@ export interface SalaryBreakdown { base: number; atrasos: number; horas_extra: n
 export interface ProjectedResult {
   resultado: number; resultado_pre_absorcion: number; budget_details: BudgetDetail[]; deuda_tarjeta_arrastrada: number;
 }
-export interface CreditGroup { account_id: string | null; mes_cargo: Month; total: number; items: EExpense[]; settlement: ESettlement | null }
+export interface CreditGroup {
+  account_id: string | null; mes_cargo: Month; total: number; items: EExpense[]; settlement: ESettlement | null;
+  /** Con perCardSettlement: la tarjeta del grupo. */
+  card_id?: string | null;
+}
 export interface Obligation { tipo: "Gasto fijo" | "Tarjeta" | "Reembolso propio" | "Préstamo"; concepto: string; account_id: string | null; monto: number }
 export interface MonthSummary {
   ingreso_total: number; gastos_fijos: number; presupuestos: number; gastos_reales: number; ingresos_extra: number;
@@ -152,7 +169,12 @@ export class FinanceCore {
     readonly opts: EngineOptions = CURRENT_OPTIONS,
   ) {
     // dict comprehension de Python: ante claves repetidas gana la última.
-    this.settlementsByKey = new Map(data.settlements.map((s) => [`${s.accountId}|${s.chargeMonth}`, s]));
+    this.settlementsByKey = new Map(data.settlements.map((s) => [this.settleKey(s.accountId, s.cardId, s.chargeMonth), s]));
+  }
+
+  /** Clave de un cargo de tarjeta: cuenta y mes (app vieja) o tarjeta y mes (C). */
+  private settleKey(accountId: string | null, cardId: string | null | undefined, chargeMonth: Month): string {
+    return this.opts.perCardSettlement && cardId ? `card:${cardId}|${chargeMonth}` : `${accountId}|${chargeMonth}`;
   }
 
   private memo<T>(key: string, fn: () => T): T {
@@ -163,7 +185,7 @@ export class FinanceCore {
   // ----- lookups
 
   settledMonth(e: EExpense): Month | null {
-    const st = this.settlementsByKey.get(`${e.accountId}|${chargeMonth(e)}`);
+    const st = this.settlementsByKey.get(this.settleKey(e.accountId, e.cardId, chargeMonth(e)));
     return st ? monthOf(st.date) : null;
   }
 
@@ -205,16 +227,17 @@ export class FinanceCore {
     const groups = new Map<string, CreditGroup>();
     for (const e of this.data.expenses) {
       if (!isCredit(e)) continue;
-      const key = `${e.accountId}|${chargeMonth(e)}`;
+      const key = this.settleKey(e.accountId, e.cardId, chargeMonth(e));
       let g = groups.get(key);
       if (!g) {
         g = { account_id: e.accountId, mes_cargo: chargeMonth(e), total: 0, items: [], settlement: this.settlementsByKey.get(key) ?? null };
+        if (this.opts.perCardSettlement) g.card_id = e.cardId ?? null;
         groups.set(key, g);
       }
       g.total += e.amount ?? 0;
       g.items.push(e);
     }
-    return [...groups.values()].sort((a, b) => cmp(a.mes_cargo, b.mes_cargo) || cmp(a.account_id ?? "", b.account_id ?? ""));
+    return [...groups.values()].sort((a, b) => cmp(a.mes_cargo, b.mes_cargo) || cmp(a.account_id ?? "", b.account_id ?? "") || cmp(a.card_id ?? "", b.card_id ?? ""));
   }
 
   private settlementsIn(accountId: string, month: Month): number {
@@ -279,7 +302,7 @@ export class FinanceCore {
       }
       const overtime = pySum(this.data.overtimes.filter((o) => o.salaryId === salaryId && o.month === month).map((o) => o.gross ?? 0));
       const deducciones = pySum(
-        salary.deductions.filter((d) => d.name).map((d) => {
+        deductionsForMonth(salary, month).filter((d) => d.name).map((d) => {
           const v = (base + atrasos + (d.appliesToExtras ? overtime : 0)) * (d.rate ?? 0);
           return this.opts.cents ? roundHalfUp(v) : v; // cada deducción, al céntimo
         }),
@@ -312,7 +335,7 @@ export class FinanceCore {
         if (!active(fe, month)) continue;
         const inst = (byFe.get(fe.id) ?? []).find((i) => i.month === month);
         result.push({
-          id: fe.id, name: fe.name, isOwn: fe.isOwn,
+          id: fe.id, name: fe.name, isOwn: fixedIsOwnForMonth(fe, month),
           monto: fixedAmountForMonth(fe, month),
           account_id: fixedAccountForMonth(fe, month),
           estado: inst ? inst.status : "impagado",

@@ -14,11 +14,13 @@ export interface ESalary {
   id: string; accountId: string | null; gross: number; start: IsoDate; end: IsoDate | null;
   deductions: { name: string | null; rate: number; appliesToExtras: boolean }[];
   revisions: { from: Month; gross: number; paidFrom?: Month }[];
+  /** A: deducciones a partir de un mes. */
+  deductionRevisions?: { from: Month; deductions: ESalary["deductions"] }[];
 }
 export interface EOvertime { id: string; salaryId: string; month: Month; gross: number }
 export interface EFixed {
   id: string; name: string; amount: number; start: IsoDate; end: IsoDate | null; accountId: string | null;
-  isOwn: boolean; revisions: { from: Month; amount?: number; accountId?: string }[];
+  isOwn: boolean; revisions: { from: Month; amount?: number; accountId?: string; isOwn?: boolean }[];
 }
 export interface EInstance { id: string; fixedId: string; month: Month; status: "pagado" | "impagado"; amount: number | null }
 export interface EBudget {
@@ -29,6 +31,8 @@ export interface EBudget {
 export interface EExpense {
   id: string; date: IsoDate; amount: number; categoryId: string; accountId: string | null;
   credit: boolean; chargeMonth: Month | null; reserveIn: "compra" | "cargo";
+  /** C: tarjeta de la compra (los pagos de tarjeta se agrupan por tarjeta). */
+  cardId?: string | null;
 }
 export interface EIncome { id: string; date: IsoDate; amount: number; categoryId: string; accountId: string | null }
 export interface ETransfer {
@@ -37,7 +41,7 @@ export interface ETransfer {
   /** Reembolso de gasto propio: transferKind 'ownExpenseRefund' (o la descripción automática de la app vieja). */
   isOwnRefund?: boolean;
 }
-export interface ESettlement { id: string; accountId: string; chargeMonth: Month; date: IsoDate; amount: number }
+export interface ESettlement { id: string; accountId: string; chargeMonth: Month; date: IsoDate; amount: number; cardId?: string }
 
 export interface EngineData {
   settings?: { ownExpensesFrom?: Month };
@@ -105,6 +109,12 @@ function fromDatasetEuros(ds: Dataset): EngineData {
       id, accountId: s.accountId ?? null, gross: s.grossMonthly ?? 0, start: s.start, end: s.end ?? null,
       deductions: (s.deductions ?? []).map((x) => ({ name: x.name ?? null, rate: x.rate ?? 0, appliesToExtras: x.appliesToExtras ?? false })),
       revisions: (s.revisions ?? []).map((r) => ({ from: r.from, gross: r.gross, ...(r.paidFrom ? { paidFrom: r.paidFrom } : {}) })),
+      ...(s.deductionRevisions?.length ? {
+        deductionRevisions: s.deductionRevisions.map((r) => ({
+          from: r.from,
+          deductions: (r.deductions ?? []).map((x) => ({ name: x.name ?? null, rate: x.rate ?? 0, appliesToExtras: x.appliesToExtras ?? false })),
+        })),
+      } : {}),
     });
     for (const o of s.overtimes ?? []) out.overtimes.push({ id: o.id, salaryId: id, month: o.month, gross: o.gross });
   }
@@ -118,6 +128,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
         from: r.from,
         ...("amount" in r && r.amount !== undefined ? { amount: r.amount } : {}),
         ...("accountId" in r && r.accountId !== undefined ? { accountId: r.accountId } : {}),
+        ...(typeof r.isOwnExpense === "boolean" ? { isOwn: r.isOwnExpense } : {}),
       })),
     });
     for (const [month, p] of entries(f.payments)) {
@@ -142,6 +153,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
         id, date: m.date, amount: m.amount, categoryId: m.categoryId || "", accountId: m.accountId ?? null,
         credit: !!m.card, chargeMonth: m.card?.chargeMonth ?? null,
         reserveIn: m.card?.reserveIn === "charge" ? "cargo" : "compra",
+        ...(m.card ? { cardId: m.card.cardId ?? null } : {}),
       });
     } else if (m.type === "income") {
       out.incomes.push({ id, date: m.date, amount: m.amount, categoryId: m.categoryId || "", accountId: m.accountId ?? null });
@@ -157,7 +169,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
   }
 
   for (const [id, s] of entries(d.cardSettlements)) {
-    out.settlements.push({ id: s.legacy?.id || id, accountId: s.accountId, chargeMonth: s.chargeMonth, date: s.date, amount: s.amount });
+    out.settlements.push({ id: s.legacy?.id || id, accountId: s.accountId, chargeMonth: s.chargeMonth, date: s.date, amount: s.amount, ...(s.cardId ? { cardId: s.cardId } : {}) });
   }
   out.settlements.sort(byId);
   return out;

@@ -20,6 +20,8 @@ export interface SalaryRevision { from: Month; gross: number; paidFrom?: Month }
 export interface Overtime { id: string; month: Month; gross: number }
 export interface SalaryDoc {
   name?: string;
+  /** A (18-oct-2026): deducciones vigentes a partir de un mes. Sin ellas, `deductions` vale para todos. */
+  deductionRevisions?: { from: Month; deductions: Deduction[] }[];
   grossMonthly: number;
   start: IsoDate;
   end: IsoDate | null;
@@ -29,7 +31,8 @@ export interface SalaryDoc {
   overtimes: Overtime[];
 }
 
-export interface FixedRevision { from: Month; amount?: number; accountId?: string; legacyBankId?: string }
+/** B (18-oct-2026): `isOwnExpense` también puede cambiar a partir de un mes. */
+export interface FixedRevision { from: Month; amount?: number; accountId?: string; isOwnExpense?: boolean; legacyBankId?: string }
 export interface FixedPayment { status: "paid" | "unpaid"; amount: number | null; legacyId?: string }
 export interface FixedExpenseDoc {
   name?: string;

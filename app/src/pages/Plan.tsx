@@ -1,6 +1,6 @@
 /** Plan: lo que se repite cada mes (nómina, gastos fijos, budgets y tarjetas). Tocar para cambiar. */
 import { useState } from "react";
-import { budgetAmountForMonth, fixedAccountForMonth, fixedAmountForMonth, type Month } from "@salary/engine";
+import { budgetAmountForMonth, fixedAccountForMonth, fixedAmountForMonth, fixedIsOwnForMonth, type Month } from "@salary/engine";
 import { BudgetEditor, CardEditor, FixedEditor, SalaryEditor } from "../components/PlanEditors";
 import { useData } from "../data";
 import { monthLong, nameOf } from "../lib/format";
@@ -53,7 +53,7 @@ export default function Plan() {
       <ul className="rows">
         {fixed.length === 0 && <li className="empty">Sin gastos fijos.</li>}
         {fixed.map((f) => <li key={f.id}><button className="what plain" onClick={open("fixed", f.id)}><b>{f.name}</b>
-          <small>{acc(fixedAccountForMonth(f, m))}{f.isOwn ? ", gasto propio" : ""}{starts(f)}{ends(f)}</small></button>
+          <small>{acc(fixedAccountForMonth(f, m))}{fixedIsOwnForMonth(f, m) ? ", gasto propio" : ""}{starts(f)}{ends(f)}</small></button>
           <span className="amt">{formatCents(fixedAmountForMonth(f, m))}</span></li>)}
         {fixed.length > 1 && <li><span className="what"><b>Total este mes</b></span><span className="amt">{formatCents(fixedTotal)}</span></li>}
       </ul>

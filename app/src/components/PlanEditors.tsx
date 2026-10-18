@@ -20,6 +20,7 @@ import Sheet from "./Sheet";
 type Raw = Record<string, unknown>;
 type Rev = { from: Month } & Raw;
 const euros = (v: unknown) => (v === undefined || v === null ? "" : Number(v).toFixed(2).replace(".", ","));
+const sameCents = (a: number | null, b: unknown) => a !== null && Math.round(a * 100) === Math.round(Number(b) * 100);
 const pastWarning = (from: Month, current: Month) =>
   from < current ? <Warn>Desde {monthLong(from)}: también cambia meses ya cerrados.</Warn> : null;
 
@@ -40,10 +41,13 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
   const curAcc = fe ? (valueInMonth(fe, revs, "accountId", currentMonth) as string) : mainAccountId ?? "";
 
   const [name, setName] = useState((fe?.name as string) ?? "");
-  const [amount, setAmount] = useState(fe ? euros(curAmount) : "");
-  const [acc, setAcc] = useState(curAcc);
   const [from, setFrom] = useState<Month>(fe ? addMonths(currentMonth, 1) : currentMonth);
-  const [own, setOwn] = useState(!!fe?.isOwnExpense);
+  // Se rellena con el importe vigente en el mes elegido (puede haber ya un cambio programado).
+  const [amount, setAmount] = useState(fe ? euros(valueInMonth(fe, revs, "amount", addMonths(currentMonth, 1))) : "");
+  const [acc, setAcc] = useState(curAcc);
+  const curOwn = fe ? !!valueInMonth(fe, revs, "isOwnExpense", currentMonth) : false;
+  const [own, setOwn] = useState(curOwn);
+  const [ownFrom, setOwnFrom] = useState<Month>(addMonths(currentMonth, 1));
   const [last, setLast] = useState<Month>(fe?.end ? String(fe.end).slice(0, 7) : currentMonth);
   const [tried, setTried] = useState(false);
   const done = (text: string, undo: () => void) => { toast(text, undo); onClose(); };
@@ -82,11 +86,15 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
     <Sheet title={fe.name as string} onClose={onClose}>
       <p className="muted">{formatEuros(curAmount)} al mes desde {nameOf(docs.accounts, curAcc)}.
         {ended ? ` Terminó en ${monthLong(String(fe.end).slice(0, 7))}.` : ""}</p>
+      {revs.some((r) => r.from > currentMonth) && <ul className="mini-list">{revs.filter((r) => r.from > currentMonth).map((r) => (
+        <li key={r.from}>Desde {monthLong(r.from)}: {[r.amount !== undefined && formatEuros(r.amount as number), r.accountId && `desde ${nameOf(docs.accounts, r.accountId as string)}`,
+          r.isOwnExpense !== undefined && (r.isOwnExpense ? "gasto propio" : "deja de ser propio")].filter(Boolean).join(", ")}</li>))}</ul>}
       <Section title="Cambiar el importe" open>
         <Field label="Nuevo importe"><AmountInput value={amount} onChange={setAmount} ariaLabel="Nuevo importe" /></Field>
         <Field label="A partir de"><MonthSelect value={from} onChange={setFrom} /></Field>
         {pastWarning(from, currentMonth)}
-        <button className="btn primary wide" disabled={!(value && value > 0)} onClick={() =>
+        {value !== null && sameCents(value, valueInMonth(fe, revs, "amount", from)) && <p className="muted small">Es el importe que ya tiene en {monthLong(from)}.</p>}
+        <button className="btn primary wide" disabled={!(value && value > 0) || sameCents(value, valueInMonth(fe, revs, "amount", from))} onClick={() =>
           done("Importe cambiado", patchItem(uid, "fixedExpenses", id!, { revisions: withRevision(revs, { from, amount: value }) }, fe))}>
           Guardar desde {monthLong(from)}</button>
       </Section>
@@ -94,17 +102,26 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
         <Field label="Se paga desde"><AccountSelect value={acc} onChange={setAcc} include={curAcc} /></Field>
         <Field label="A partir de"><MonthSelect value={from} onChange={setFrom} /></Field>
         {pastWarning(from, currentMonth)}
-        <button className="btn wide" disabled={!acc || acc === curAcc} onClick={() =>
+        <button className="btn wide" disabled={!acc || acc === valueInMonth(fe, revs, "accountId", from)} onClick={() =>
           done("Cuenta cambiada", patchItem(uid, "fixedExpenses", id!, { revisions: withRevision(revs, { from, accountId: acc }) }, fe))}>
           Guardar desde {monthLong(from)}</button>
       </Section>
-      <Section title="Nombre y gasto propio">
-        <Field label="Nombre"><TextInput value={name} onChange={setName} /></Field>
+      <Section title="Gasto propio">
+        <p className="muted small">Ahora {curOwn ? "es" : "no es"} un gasto propio{curOwn ? ": lo reembolsas desde la principal" : ""}.</p>
         <label className="check"><input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
           Es un gasto propio (lo reembolsas desde la principal)</label>
-        {own !== !!fe.isOwnExpense && <Warn>Marcar o desmarcar «gasto propio» cambia todos los meses, también los cerrados (en la app vieja era igual).</Warn>}
+        <Field label="A partir de"><MonthSelect value={ownFrom} onChange={setOwnFrom} /></Field>
+        {own && valueInMonth(fe, revs, "accountId", ownFrom) === mainAccountId && <Warn>Ese mes se paga desde la cuenta principal: no hay nada que reembolsar hasta que cambie de cuenta.</Warn>}
+        {pastWarning(ownFrom, currentMonth)}
+        <button className="btn wide" disabled={own === !!valueInMonth(fe, revs, "isOwnExpense", ownFrom)} onClick={() =>
+          done(own ? "Gasto propio desde " + monthLong(ownFrom) : "Deja de ser gasto propio en " + monthLong(ownFrom),
+            patchItem(uid, "fixedExpenses", id!, { revisions: withRevision(revs, { from: ownFrom, isOwnExpense: own }) }, fe))}>
+          Guardar desde {monthLong(ownFrom)}</button>
+      </Section>
+      <Section title="Nombre">
+        <Field label="Nombre"><TextInput value={name} onChange={setName} /></Field>
         <button className="btn wide" disabled={!name.trim()} onClick={() =>
-          done("Guardado", patchItem(uid, "fixedExpenses", id!, { name: name.trim(), isOwnExpense: own }, fe))}>Guardar</button>
+          done("Guardado", patchItem(uid, "fixedExpenses", id!, { name: name.trim() }, fe))}>Guardar</button>
       </Section>
       <Section title={ended ? "Fecha de fin" : "Terminar"}>
         <Field label="Último mes que se paga"><MonthSelect value={last} onChange={setLast} min={String(fe.start).slice(0, 7)} /></Field>
@@ -130,8 +147,8 @@ export function BudgetEditor({ id, onClose }: { id: string | null; onClose: () =
   const cats = sortedLive(docs.categories);
   const [cat, setCat] = useState((b?.categoryId as string) ?? cats[0]?.[0] ?? "");
   const [acc, setAcc] = useState((b?.accountId as string) ?? mainAccountId ?? "");
-  const [amount, setAmount] = useState(b ? euros(cur) : "");
   const [from, setFrom] = useState<Month>(b ? addMonths(currentMonth, 1) : currentMonth);
+  const [amount, setAmount] = useState(b ? euros(valueInMonth(b, revs, "amount", addMonths(currentMonth, 1))) : "");
   const [last, setLast] = useState<Month>(b?.end ? String(b.end).slice(0, 7) : currentMonth);
   const [tried, setTried] = useState(false);
   const value = parseAmount(amount);
@@ -169,7 +186,8 @@ export function BudgetEditor({ id, onClose }: { id: string | null; onClose: () =
         <Field label="Nuevo importe"><AmountInput value={amount} onChange={setAmount} ariaLabel="Nuevo importe" /></Field>
         <Field label="A partir de"><MonthSelect value={from} onChange={setFrom} /></Field>
         {pastWarning(from, currentMonth)}
-        <button className="btn primary wide" disabled={!(value && value > 0)} onClick={() =>
+        {value !== null && sameCents(value, valueInMonth(b, revs, "amount", from)) && <p className="muted small">Es el importe que ya tiene en {monthLong(from)}.</p>}
+        <button className="btn primary wide" disabled={!(value && value > 0) || sameCents(value, valueInMonth(b, revs, "amount", from))} onClick={() =>
           done("Importe cambiado", patchItem(uid, "budgets", id!, { revisions: withRevision(revs, { from, amount: value }) }, b))}>Guardar desde {monthLong(from)}</button>
       </Section>
       <Section title={ended ? "Fecha de fin" : "Terminar"}>
@@ -229,7 +247,10 @@ export function SalaryEditor({ id, onClose }: { id: string | null; onClose: () =
   const [from, setFrom] = useState<Month>(currentMonth);
   const [late, setLate] = useState(false);
   const [paidFrom, setPaidFrom] = useState<Month>(currentMonth);
-  const [rows, setRows] = useState<DedRow[]>(s ? toRows((s.deductions as Raw[]) ?? []) : SPAIN_DEDUCTIONS.map((d) => ({ name: d.name, percent: String(d.percent).replace(".", ","), appliesToExtras: d.appliesToExtras })));
+  const dedRevs = (s?.deductionRevisions as Rev[] | undefined) ?? [];
+  const curDeds = s ? ((valueInMonth(s, dedRevs, "deductions", currentMonth) as Raw[]) ?? []) : [];
+  const [dedFrom, setDedFrom] = useState<Month>(addMonths(currentMonth, 1));
+  const [rows, setRows] = useState<DedRow[]>(s ? toRows(curDeds) : SPAIN_DEDUCTIONS.map((d) => ({ name: d.name, percent: String(d.percent).replace(".", ","), appliesToExtras: d.appliesToExtras })));
   const [otMonth, setOtMonth] = useState<Month>(currentMonth);
   const [otGross, setOtGross] = useState("");
   const [last, setLast] = useState<Month>(s?.end ? String(s.end).slice(0, 7) : currentMonth);
@@ -289,10 +310,15 @@ export function SalaryEditor({ id, onClose }: { id: string | null; onClose: () =
           done("Añadido", patchItem(uid, "salaries", id!, { overtimes: [...overtimes, { id: localId(), month: otMonth, gross: otValue }] }, s))}>Añadir</button>
       </Section>
       <Section title="Deducciones">
-        <Warn>Las deducciones no tienen fecha: cambiarlas recalcula todos los meses, también los cerrados (en la app vieja era igual).</Warn>
+        <p className="muted small">Las de este mes. Los cambios valen a partir del mes que elijas; los anteriores no cambian.</p>
         <Deductions rows={rows} setRows={setRows} />
+        <Field label="A partir de"><MonthSelect value={dedFrom} onChange={setDedFrom} /></Field>
+        {pastWarning(dedFrom, currentMonth)}
         <Errors list={dedErrors} />
-        <button className="btn wide" disabled={dedErrors.length > 0} onClick={() => done("Deducciones guardadas", patchItem(uid, "salaries", id!, { deductions: deds }, s))}>Guardar deducciones</button>
+        <button className="btn wide" disabled={dedErrors.length > 0} onClick={() =>
+          done(`Deducciones desde ${monthLong(dedFrom)}`, patchItem(uid, "salaries", id!, { deductionRevisions: withRevision(dedRevs, { from: dedFrom, deductions: deds }) }, s))}>
+          Guardar desde {monthLong(dedFrom)}</button>
+        {dedRevs.length > 0 && <ul className="mini-list">{dedRevs.map((r) => <li key={r.from}>Desde {monthLong(r.from)}: {(r.deductions as Raw[]).filter((x) => x.name).map((x) => `${x.name} ${String(Math.round(Number(x.rate) * 1e6) / 1e4).replace(".", ",")} %`).join(", ") || "sin deducciones"}</li>)}</ul>}
       </Section>
       <Section title="Nombre">
         <Field label="Nombre"><TextInput value={name} onChange={setName} /></Field>

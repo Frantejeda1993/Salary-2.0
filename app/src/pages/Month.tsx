@@ -86,7 +86,7 @@ export default function MonthPage() {
 
   for (const g of core.creditGroups()) {
     if (g.mes_cargo > month || g.settlement !== null) continue;
-    const cardId = ((docs.movements[g.items[0].id] as Raw)?.card as { cardId?: string } | undefined)?.cardId ?? `card_${g.account_id}`;
+    const cardId = g.card_id ?? ((docs.movements[g.items[0].id] as Raw)?.card as { cardId?: string } | undefined)?.cardId ?? `card_${g.account_id}`;
     todos.push({
       key: `cc-${g.account_id}-${g.mes_cargo}`, title: nameOf(docs.cards, cardId, "Tarjeta"),
       detail: `Cargo de ${monthName(g.mes_cargo)} en ${accName(g.account_id)}`, cents: g.total, late: g.mes_cargo < month,
@@ -96,11 +96,12 @@ export default function MonthPage() {
     });
   }
   // Pago de tarjeta que ya no cuadra con sus compras (se editó o añadió alguna después de saldar).
-  const groupTotal = new Map(core.creditGroups().map((g) => [`${g.account_id}|${g.mes_cargo}`, g.total]));
+  // Igual que el motor (C): por tarjeta y mes de cargo.
+  const groupTotal = new Map(core.creditGroups().map((g) => [`${g.card_id ?? g.account_id}|${g.mes_cargo}`, g.total]));
   for (const [id, st] of Object.entries(docs.cardSettlements)) {
     if (monthOf(st.date as string) !== month) continue;
     const paid = Math.round((st.amount as number) * 100);
-    const total = groupTotal.get(`${st.accountId}|${st.chargeMonth}`) ?? 0;
+    const total = groupTotal.get(`${(st.cardId as string) ?? st.accountId}|${st.chargeMonth}`) ?? 0;
     if (paid !== total) {
       todos.push({
         key: `mis-${id}`, title: `${nameOf(docs.cards, st.cardId as string, "Tarjeta")}: el pago no cuadra`,

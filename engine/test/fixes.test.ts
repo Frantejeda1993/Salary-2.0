@@ -199,7 +199,7 @@ describe("céntimos enteros", () => {
 // ------------------------------------------------------------------ invariantes del motor corregido
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { addMonths, fromDataset, monthRange } from "../src";
+import { addMonths, engineMetrics, fromDataset, monthRange } from "../src";
 
 describe("motor corregido sobre los 12 ficheros sintéticos", () => {
   const DIR = join(__dirname, "..", "..", "fixtures", "reference");
@@ -230,5 +230,87 @@ describe("motor corregido sobre los 12 ficheros sintéticos", () => {
         }
       });
     }
+  }
+});
+
+// ---------------------------------------------------------------------------- decisiones del 18-oct-2026
+
+describe("A · deducciones a partir de un mes", () => {
+  it("cada mes usa las deducciones vigentes; los anteriores no cambian", () => {
+    const data = world();
+    data.salaries[0].deductions = [{ name: "IRPF", percentage: 0.1, applies_to_extras: true }];
+    const engine = toEngine(data);
+    const before = new FinanceCore(toEngine(data), "2026-06", "2026-02", EUROS);
+    engine.salaries[0].deductionRevisions = [{ from: "2026-05", deductions: [{ name: "IRPF", rate: 0.15, appliesToExtras: true }] }];
+    const after = new FinanceCore(engine, "2026-06", "2026-02", EUROS);
+    expect(after.salaryNet("s1", "2026-04")).toBe(before.salaryNet("s1", "2026-04"));
+    expect(before.salaryNet("s1", "2026-05")).toBeCloseTo(1800, 9);
+    expect(after.salaryNet("s1", "2026-05")).toBeCloseTo(1700, 9);
+    expect(after.salaryNet("s1", "2026-09")).toBeCloseTo(1700, 9);
+    // Meses cerrados: el arrastre hasta abril es idéntico.
+    expect(after.remainingFromPreviousMonth("2026-05", MAIN)).toBe(before.remainingFromPreviousMonth("2026-05", MAIN));
+  });
+});
+
+describe("B · «gasto propio» a partir de un mes", () => {
+  it("solo los meses desde la revisión generan reembolso", () => {
+    const data = world();
+    data.fixed_expenses = [{ id: "f", nombre: "Seguro", monto: 50, fecha_inicio: d(2026, 2, 1), fecha_fin: null, account_id: "sec", es_propio: false }];
+    const engine = toEngine(data);
+    engine.fixedExpenses[0].revisions = [{ from: "2026-05", isOwn: true }];
+    const core = new FinanceCore(engine, "2026-04", "2026-02", EUROS);
+    expect(core.fixedExpensesForMonth("2026-04")[0].isOwn).toBe(false);
+    expect(core.fixedExpensesForMonth("2026-05")[0].isOwn).toBe(true);
+    expect([...core.ownExpensesPending("2026-04", MAIN)]).toEqual([]);
+    expect([...core.ownExpensesPending("2026-05", MAIN)]).toEqual([["sec", 50]]);
+    // Y al revés: dejar de serlo desde un mes.
+    engine.fixedExpenses[0].isOwn = true;
+    engine.fixedExpenses[0].revisions = [{ from: "2026-06", isOwn: false }];
+    const core2 = new FinanceCore(engine, "2026-04", "2026-02", EUROS);
+    expect(core2.fixedExpensesForMonth("2026-05")[0].isOwn).toBe(true);
+    expect(core2.fixedExpensesForMonth("2026-06")[0].isOwn).toBe(false);
+  });
+});
+
+describe("C · pagos de tarjeta por tarjeta", () => {
+  function twoCards() {
+    const data = world();
+    data.expenses = [
+      { id: "e1", fecha: d(2026, 3, 5), monto: 100, categoria_id: "x", account_id: MAIN, metodo_pago: "credito", mes_cargo: "2026-04" },
+      { id: "e2", fecha: d(2026, 3, 6), monto: 40, categoria_id: "x", account_id: MAIN, metodo_pago: "credito", mes_cargo: "2026-04" },
+    ];
+    data.credit_settlements = [{ id: "st", account_id: MAIN, mes_cargo: "2026-04", fecha: d(2026, 4, 2), monto: 100 }];
+    const engine = toEngine(data);
+    engine.expenses[0].cardId = "visa";
+    engine.expenses[1].cardId = "amex";
+    engine.settlements[0].cardId = "visa";
+    return engine;
+  }
+  it("saldar una tarjeta no salda la otra de la misma cuenta", () => {
+    const core = new FinanceCore(twoCards(), "2026-04", "2026-02", EUROS);
+    const groups = core.creditGroups();
+    expect(groups.map((g) => [g.card_id, g.total, !!g.settlement])).toEqual([["amex", 40, false], ["visa", 100, true]]);
+    expect(core.creditOutstanding(MAIN, "2026-04")).toBe(40);
+  });
+  it("la regla vieja (por cuenta) daba las dos por saldadas", () => {
+    const core = new FinanceCore(twoCards(), "2026-04", "2026-02", { ...EUROS, perCardSettlement: false });
+    expect(core.creditGroups()).toHaveLength(1);
+    expect(core.creditOutstanding(MAIN, "2026-04")).toBe(0);
+  });
+});
+
+describe("C no cambia nada con una tarjeta por cuenta (tus datos)", () => {
+  const DIR2 = join(__dirname, "..", "..", "fixtures", "reference");
+  for (const f of readdirSync(DIR2).filter((x) => /^synthetic-\d+\.json$/.test(x)).sort()) {
+    it(f, () => {
+      const ref = JSON.parse(readFileSync(join(DIR2, f), "utf-8"));
+      for (const c of ref.cases) {
+        const data = fromDataset(ref.dataset, { cents: true });
+        const range = monthRange(c.months[0], c.months[1]);
+        const a = engineMetrics(data, c.currentMonth, c.startMonth, range, CURRENT_OPTIONS);
+        const b = engineMetrics(data, c.currentMonth, c.startMonth, range, { ...CURRENT_OPTIONS, perCardSettlement: false });
+        expect(a).toEqual(b);
+      }
+    });
   }
 });
