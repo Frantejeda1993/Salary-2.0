@@ -613,8 +613,8 @@ def build_plan(tabs: list[Tab], ex: Extraction, until: str, fixes: dict | None =
     """`fixes`: correcciones tuyas, en un JSON fuera del repo (tienen datos reales):
         {"items":   [{"month","type": income|expense|card|loan, "amount","description",
                       "category"?, "date"?, "chargeMonth"? (tarjeta)}],
-         "remain":  {"2025-02": 4.38},                                   # «Remain last month» real
-         "closing": {"2025-01": {"amount": 4.38, "description": "…"}}}   # cierre real de un mes
+         "remain":  {"2025-02": 10.0},                                   # «Remain last month» real
+         "closing": {"2025-01": {"amount": 10.0, "description": "…"}}}   # cierre real de un mes
     """
     plan = HistoryPlan()
     M = plan.movs
