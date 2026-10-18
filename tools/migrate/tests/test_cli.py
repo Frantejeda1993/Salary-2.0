@@ -193,3 +193,12 @@ def test_missing_excel_says_what_is_there(env):
     with pytest.raises(SystemExit) as e:
         cli.main(["history", "--xlsx", str(env["tmp"] / "Salary.xlsx"), "--reports-dir", str(env["tmp"])])
     assert "Salary (1).xlsx" in str(e.value)
+
+
+def test_fixes_saved_with_bom_are_read(tmp_path):
+    p = tmp_path / "fixes.json"
+    p.write_bytes(b"\xef\xbb\xbf" + '{"remain": {"2025-02": 1.5}, "items": [{"description": "Préstamo"}]}'.encode())
+    assert cli._load_fixes(str(p))["remain"] == {"2025-02": 1.5}
+    p.write_text("{mal", encoding="utf-8")
+    with pytest.raises(SystemExit, match="no es un JSON válido"):
+        cli._load_fixes(str(p))

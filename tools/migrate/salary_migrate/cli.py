@@ -226,7 +226,11 @@ def _load_fixes(path: str | None) -> dict | None:
     if not p.exists():
         near = sorted(x.name for x in p.parent.glob("*")) if p.parent.exists() else []
         raise SystemExit(f"No encuentro el fichero de correcciones {p}." + (f" En {p.parent} hay: {', '.join(near)}." if near else ""))
-    return json.loads(p.read_text(encoding="utf-8"))
+    # utf-8-sig: el Bloc de notas y PowerShell 5 guardan el UTF-8 con BOM.
+    try:
+        return json.loads(p.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"{p} no es un JSON válido (línea {e.lineno}, columna {e.colno}): {e.msg}.")
 
 
 def _is_history(doc: dict) -> bool:
