@@ -7,6 +7,7 @@ import { useSearchParams } from "react-router-dom";
 import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, type Month } from "@salary/engine";
 import AmountSheet from "../components/AmountSheet";
 import Fold from "../components/Fold";
+import SpendingSheet from "../components/SpendingSheet";
 import ScreenHeader from "../components/ScreenHeader";
 import { IconNext, IconPrev } from "../components/Icons";
 import { useAuth } from "../auth";
@@ -36,6 +37,7 @@ export default function MonthPage() {
   const { toast } = useUI();
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Todo | null>(null);
+  const [spending, setSpending] = useState(false);
 
   if (!ready || !core) return <div className="splash">Cargando tus datos…</div>;
   if (!mainAccountId || !docs.accounts[mainAccountId]) {
@@ -51,7 +53,7 @@ export default function MonthPage() {
   const month: Month = asked && /^\d{4}-\d{2}$/.test(asked) && asked >= startMonth && asked <= lastMonth ? asked : currentMonth;
   const go = (m: Month) => setParams(m === currentMonth ? {} : { mes: m }, { replace: true });
   if (hist && month <= hist.last && month < currentMonth) {
-    return <HistoryMonth month={month} first={startMonth} last={lastMonth} go={go} />;
+    return <HistoryMonth month={month} first={startMonth} last={lastMonth} go={go} current={currentMonth} />;
   }
 
   const phase = month < currentMonth ? "past" : month === currentMonth ? "current" : "future";
@@ -170,10 +172,19 @@ export default function MonthPage() {
         <h1>{monthLong(month)}<small>{phase === "current" ? "Este mes" : phase === "past" ? "Mes cerrado" : "Previsión"}</small></h1>
         <button onClick={() => go(addMonths(month, 1))} disabled={month >= lastMonth} aria-label="Mes siguiente"><IconNext /></button>
       </div>
+      <TodayChip month={month} current={currentMonth} go={go} />
 
       <section className="closing" aria-label="Resultado del mes">
-        <div className="label">{hero.label}</div>
-        <div className={`figure ${hero.value < 0 ? "neg" : ""}`}>{formatCents(hero.value)}</div>
+        {phase === "future" ? <>
+          <div className="label">{hero.label}</div>
+          <div className={`figure ${hero.value < 0 ? "neg" : ""}`}>{formatCents(hero.value)}</div>
+        </> : (
+          <button className="hero-btn" onClick={() => setSpending(true)} aria-haspopup="dialog">
+            <span className="label">{hero.label}</span>
+            <span className={`figure ${hero.value < 0 ? "neg" : ""}`}>{formatCents(hero.value)}</span>
+            <span className="hero-hint">Ver gastos por categoría</span>
+          </button>
+        )}
         {phase === "current" && (real > 0 ? (
           <>
             <div className={`ledger-bar ${proj < 0 ? "overdrawn" : ""}`} role="img"
@@ -314,6 +325,7 @@ export default function MonthPage() {
 
       <Trend month={month} />
 
+      {spending && phase !== "future" && <SpendingSheet month={month} phase={phase as "past" | "current"} onClose={() => setSpending(false)} />}
       {editing && editing.sheet && (
         <AmountSheet title={editing.sheet.title} detail={editing.detail || undefined} cents={editing.cents} maxCents={editing.sheet.maxCents}
                      confirm={editing.sheet.confirm} onClose={() => setEditing(null)}
@@ -420,7 +432,14 @@ function historyRange(movements: Record<string, Raw>): { first: Month; last: Mon
  * Un mes anterior a la app: lo que hiciste según tu Excel. El saldo de la cuenta «Excel» al
  * cierre es tu remanente de ese mes; el resultado, lo que cambió en el mes.
  */
-function HistoryMonth({ month, first, last, go }: { month: Month; first: Month; last: Month; go: (m: Month) => void }) {
+function TodayChip({ month, current, go }: { month: Month; current: Month; go: (m: Month) => void }) {
+  if (month === current) return null;
+  return <div className="today-row"><button className="today-chip" onClick={() => go(current)}>
+    {month < current ? <>Ir a {monthName(current)} <IconNext /></> : <><IconPrev /> Volver a {monthName(current)}</>}</button></div>;
+}
+
+function HistoryMonth({ month, first, last, go, current }: { month: Month; first: Month; last: Month; go: (m: Month) => void; current: Month }) {
+  const [spending, setSpending] = useState(false);
   const { core, docs } = useData();
   const result = core!.monthRealResult(HIST_POOL, month);
   const closing = core!.realBalance(HIST_POOL, month);
@@ -444,9 +463,13 @@ function HistoryMonth({ month, first, last, go }: { month: Month; first: Month; 
         <h1>{monthLong(month)}<small>Antes de la app, desde tu Excel</small></h1>
         <button onClick={() => go(addMonths(month, 1))} disabled={month >= last} aria-label="Mes siguiente"><IconNext /></button>
       </div>
+      <TodayChip month={month} current={current} go={go} />
       <section className="closing" aria-label="Remanente del mes">
-        <div className="label">Remanente al cierre</div>
-        <div className={`figure ${closing < 0 ? "neg" : ""}`}>{formatCents(closing)}</div>
+        <button className="hero-btn" onClick={() => setSpending(true)} aria-haspopup="dialog">
+          <span className="label">Remanente al cierre</span>
+          <span className={`figure ${closing < 0 ? "neg" : ""}`}>{formatCents(closing)}</span>
+          <span className="hero-hint">Ver gastos por categoría</span>
+        </button>
         <p className="muted small">Resultado del mes {formatCents(result)}. Es el «Total» de costes variables de tu hoja.</p>
       </section>
       <div className="figures">
@@ -462,6 +485,7 @@ function HistoryMonth({ month, first, last, go }: { month: Month; first: Month; 
         {byCat.size === 0 && <li className="empty">Sin gastos este mes.</li>}
       </ul>
       <p className="muted small">El detalle está en Movimientos. Los ajustes («Ajuste del remanente») son cambios que hiciste a mano en la hoja.</p>
+      {spending && <SpendingSheet month={month} phase="past" onClose={() => setSpending(false)} />}
     </div>
   );
 }

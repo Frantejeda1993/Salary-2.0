@@ -454,3 +454,38 @@ a.btn { text-decoration: none; display: flex; align-items: center; justify-conte
 .wallet-names li { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
 .guide-h { font-size: 15px; font-weight: 600; margin: 14px 0 0; }
 span.guide-code { display: flex; }
+
+/* Cifra grande que abre el gasto por categoría */
+.hero-btn { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; border-radius: 12px; }
+.hero-btn .label, .hero-btn .figure { display: block; }
+.hero-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.hero-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--action); font-weight: 500; min-height: 28px; }
+.hero-hint::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-top: 1.5px solid currentColor; transform: rotate(45deg); }
+
+/* Ir al mes actual */
+.today-row { display: flex; justify-content: center; margin: -2px 0 6px; }
+.today-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 4px 14px; border-radius: 18px; border: 1px solid var(--rule);
+  background: var(--sheet); color: var(--action); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.today-chip svg { width: 16px; height: 16px; }
+
+/* Anillo de gasto por categoría (paleta validada: 6 huecos, claro y oscuro) */
+:root { --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #6250d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #9085e9; } }
+:root[data-theme="dark"] { --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #9085e9; }
+.donut { margin: 12px auto 4px; max-width: 240px; }
+.donut svg { width: 100%; height: auto; display: block; }
+.donut .slice { cursor: pointer; transition: opacity .15s; }
+.donut path.slice.dim, .legend li.dim { opacity: .35; }
+.slice.s1, .sw.s1 { fill: var(--cat-1); stroke: var(--cat-1); background: var(--cat-1); }
+.slice.s2, .sw.s2 { fill: var(--cat-2); background: var(--cat-2); }
+.slice.s3, .sw.s3 { fill: var(--cat-3); background: var(--cat-3); }
+.slice.s4, .sw.s4 { fill: var(--cat-4); background: var(--cat-4); }
+.slice.s5, .sw.s5 { fill: var(--cat-5); background: var(--cat-5); }
+.slice.s6, .sw.s6 { fill: var(--cat-6); background: var(--cat-6); }
+path.slice { stroke: none; }
+circle.slice { fill: none; }
+.donut-label { text-anchor: middle; font-size: 12px; fill: var(--ink-2); }
+.donut-value { text-anchor: middle; font-size: 19px; font-weight: 600; fill: var(--ink); font-variant-numeric: tabular-nums; }
+.legend .what b { display: flex; align-items: center; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; display: inline-block; }
+@media (prefers-reduced-motion: reduce) { .donut .slice { transition: none; } }

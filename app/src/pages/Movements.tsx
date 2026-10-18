@@ -72,6 +72,10 @@ export default function Movements() {
           <button onClick={() => setMonth(addMonths(month, 1))} disabled={month >= addMonths(currentMonth, 12)} aria-label="Mes siguiente"><IconNext /></button>
         </div>
       )}
+      {!range && month !== currentMonth && (
+        <div className="today-row"><button className="today-chip" onClick={() => setMonth(currentMonth)}>
+          {month < currentMonth ? <>Ir a {monthName(currentMonth)} <IconNext /></> : <><IconPrev /> Volver a {monthName(currentMonth)}</>}</button></div>
+      )}
       <div className="search-row">
         <input className="input search" type="search" placeholder="Buscar concepto, categoría o cuenta" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar" />
         <button className={`btn filter-btn ${activeCount ? "on" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)}>
