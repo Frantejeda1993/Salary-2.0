@@ -6,7 +6,7 @@ import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
 import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
-import ShortcutGuide from "../components/ShortcutGuide";
+import ShortcutGuide, { WalletNames } from "../components/ShortcutGuide";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -163,6 +163,7 @@ function AccountEditor({ id, onClose, onCard }: { id: string | null; onClose: ()
         <AmountInput value={initial} onChange={setInitial} ariaLabel="Saldo inicial" /></Field>
       {initialChanged && <Warn>El saldo inicial cambia el saldo de todos los meses, también los cerrados.</Warn>}
       {tried && <Errors list={errors} />}
+      {a && id && <WalletNames coll="accounts" id={id} />}
       {a && <section className="changes">
         <div className="section-head"><h4>Tarjetas de crédito</h4><button className="link" onClick={() => onCard(null)}>Añadir tarjeta</button></div>
         {cards.length === 0 ? <p className="muted small">Ninguna tarjeta se paga desde esta cuenta.</p> : (

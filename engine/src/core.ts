@@ -104,6 +104,8 @@ export interface BudgetDetail {
   presupuesto: number;
   real_spent: number;
   available: number;
+  /** Gastos fijos marcados para contar en este budget (ya se descuentan como fijos). */
+  fixed_in_budget?: number;
   absorbed?: number;
 }
 
@@ -353,6 +355,23 @@ export class FinanceCore {
     });
   }
 
+  /**
+   * Gastos fijos que cuentan dentro de un budget, por categoría, en una cuenta y mes. Importe
+   * pagado si se pagó; si no, el previsto. Solo cuentan en el budget de su misma cuenta.
+   */
+  fixedInBudget(month: Month, accountId: string): Map<string, number> {
+    return this.memo(`fib|${month}|${accountId}`, () => {
+      const out = new Map<string, number>();
+      const byId = new Map(this.data.fixedExpenses.map((f) => [f.id, f]));
+      for (const fe of this.fixedExpensesForMonth(month)) {
+        const cat = byId.get(fe.id)?.budgetCategoryId;
+        if (!cat || fe.account_id !== accountId) continue;
+        out.set(cat, (out.get(cat) ?? 0) + (fe.monto_pagado !== null ? fe.monto_pagado : fe.monto));
+      }
+      return out;
+    });
+  }
+
   rawCategoryExpenses(month: Month, accountId: string | null = null): Map<string, number> {
     return this.memo(`rce|${month}|${accountId}`, () => {
       const raw = new Map<string, number>();
@@ -512,16 +531,22 @@ export class FinanceCore {
       );
       const budgets = this.activeBudgets(month).filter((b) => b.accountId === accountId);
       const raw = this.rawCategoryExpenses(month, accountId);
+      const fib = new Map(this.fixedInBudget(month, accountId));
 
       let budgetImpact = 0;
       const details: BudgetDetail[] = [];
       for (const b of budgets) {
         const spent = raw.get(b.categoryId as string) ?? 0;
         const amount = budgetAmountForMonth(b, month);
-        budgetImpact += pyMax(amount, pyMax(spent, 0));
+        // Un fijo que cuenta en el budget ya está en fixedTotal: aquí solo se reserva lo que falta.
+        // Si hubiera dos budgets de la misma categoría, el fijo cuenta solo en el primero.
+        const fx = fib.get(b.categoryId as string) ?? 0;
+        fib.delete(b.categoryId as string);
+        const effective = pyMax(spent, 0) + fx;
+        budgetImpact += pyMax(amount, effective) - fx;
         details.push({
           budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent,
-          available: amount - pyMax(spent, 0), absorbed: 0,
+          available: amount - effective, absorbed: 0, ...(fx ? { fixed_in_budget: fx } : {}),
         });
       }
       const budgetCats = new Set(budgets.map((b) => b.categoryId));
@@ -615,14 +640,18 @@ export class FinanceCore {
         this.fixedExpensesForMonth(target).filter((fe) => fe.account_id === accountId && fe.estado === "impagado").map((fe) => fe.monto),
       );
       const raw = this.rawCategoryExpenses(target, accountId);
+      const fib = new Map(this.fixedInBudget(target, accountId));
       const details: BudgetDetail[] = [];
       let pendingBudget = 0;
       for (const b of this.activeBudgets(target)) {
         if (b.accountId !== accountId) continue;
         const spent = raw.get(b.categoryId as string) ?? 0;
-        const effective = pyMax(spent, 0);
+        const fx = fib.get(b.categoryId as string) ?? 0;
+        fib.delete(b.categoryId as string);
+        const effective = pyMax(spent, 0) + fx;
         const amount = budgetAmountForMonth(b, target);
-        details.push({ budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent, available: amount - effective });
+        details.push({ budget_id: b.id, categoria_id: b.categoryId, presupuesto: amount, real_spent: spent, available: amount - effective,
+          ...(fx ? { fixed_in_budget: fx } : {}) });
         if (effective < amount) pendingBudget += amount - effective;
       }
       const creditPending = this.creditOutstanding(accountId, target, true);

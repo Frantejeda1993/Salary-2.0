@@ -5,10 +5,10 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { useData } from "../data";
-import { addMovement, deleteMovement, updateMovement, type NewMovement } from "../lib/actions";
+import { addMovement, deleteMovement, patchItem, updateMovement, type NewMovement } from "../lib/actions";
 import { parseAmount, formatEuros } from "../lib/money";
 import {
-  cardChargeMonth, findDuplicate, payWithOf, findMerchant, lastPayWith, merchantHistory, suggestMerchants, todayIn,
+  cardChargeMonth, findDuplicate, payWithOf, findMerchant, lastPayWith, merchantHistory, suggestMerchants, todayIn, walletNameMoves,
   type CardLike, type RawCol,
 } from "../lib/quickadd";
 import { monthLong, sortedLive } from "../lib/format";
@@ -85,6 +85,12 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   if (kind !== "transfer" && !payWith) errors.push("Elige la cuenta.");
   if (kind === "transfer" && (!fromAcc || !toAcc || fromAcc === toAcc)) errors.push("Elige dos cuentas distintas.");
 
+  // Atajo genérico: recordar qué tarjeta de Wallet es cada tarjeta o cuenta de la app.
+  const walletName = !ed && kind === "expense" ? prefill.walletName : undefined;
+  const offerRemember = !!walletName && !!payWith && payWith !== prefill.walletMatch;
+  const [remember, setRemember] = useState(true);
+  const payName = payWith.startsWith("card:") ? (docs.cards[payWith.slice(5)]?.name as string) : (docs.accounts[payWith.slice(4)]?.name as string);
+
   function save() {
     setTried(true);
     if (!amountOk) { document.querySelector<HTMLInputElement>(".big-amount input")?.focus(); return; }
@@ -113,6 +119,11 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
       return;
     }
     const { undo } = addMovement(user.uid, m, prefill.source ?? "app");
+    if (offerRemember && remember && walletName) {
+      for (const [coll, id, names] of walletNameMoves(docs.cards as RawCol, docs.accounts as RawCol, walletName, payWith)) {
+        patchItem(user.uid, coll, id, { walletNames: names }, (coll === "cards" ? docs.cards : docs.accounts)[id] as Record<string, unknown>);
+      }
+    }
     closeQuickAdd();
     const what = kind === "expense" ? "Gasto" : kind === "income" ? "Ingreso" : isLoan ? "Préstamo" : "Transferencia";
     toast(`${what} de ${formatEuros(value)} guardado`, undo);
@@ -167,6 +178,10 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
               )}
             </select>
           </label>
+          {offerRemember && payName && (
+            <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              Recordar: «{walletName}» de Wallet es {payName}</label>
+          )}
           {kind === "expense" && card && chargeMonth && (
             <div className="field"><span>Se cobra en {monthLong(chargeMonth)}. ¿En qué mes lo descuentas?</span>
               <div className="segmented" role="group">

@@ -14,8 +14,9 @@ import { SPAIN_DEDUCTIONS } from "../lib/onboarding";
 import { canDeleteFixed, endOfMonth, localId, paymentsAfter, valueInMonth, withRevision } from "../lib/plan";
 import { useUI } from "../ui";
 import AmountInput from "./AmountInput";
-import { AccountSelect, CategorySelect, Errors, Field, MonthSelect, Section, TextInput, Warn } from "./Form";
+import { AccountSelect, CategorySelect, Errors, InBudgetChoice, Field, MonthSelect, Section, TextInput, Warn } from "./Form";
 import Sheet from "./Sheet";
+import { WalletNames } from "./ShortcutGuide";
 
 export type Raw = Record<string, unknown>;
 export type Rev = { from: Month } & Raw;
@@ -42,6 +43,7 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
 
   const [name, setName] = useState((fe?.name as string) ?? "");
   const [categoryId, setCategoryId] = useState((fe?.categoryId as string) ?? "");
+  const [inBudget, setInBudget] = useState(!!fe?.countsInBudget);
   const [from, setFrom] = useState<Month>(fe ? addMonths(currentMonth, 1) : currentMonth);
   // Se rellena con el importe vigente en el mes elegido (puede haber ya un cambio programado).
   const [amount, setAmount] = useState(fe ? euros(valueInMonth(fe, revs, "amount", addMonths(currentMonth, 1))) : "");
@@ -61,7 +63,8 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
         <Field label="Nombre"><TextInput value={name} onChange={setName} placeholder="Alquiler" /></Field>
         <Field label="Importe cada mes"><AmountInput value={amount} onChange={setAmount} ariaLabel="Importe" /></Field>
         <Field label="Se paga desde"><AccountSelect value={acc} onChange={setAcc} /></Field>
-        <Field label="Categoría" hint="Opcional. Sirve para ordenar y buscar; no cambia ningún cálculo."><CategorySelect value={categoryId} onChange={setCategoryId} /></Field>
+        <Field label="Categoría" hint="Opcional."><CategorySelect value={categoryId} onChange={setCategoryId} /></Field>
+        <InBudgetChoice categoryId={categoryId} accountId={acc} value={inBudget} onChange={setInBudget} />
         <Field label="Empieza en"><MonthSelect value={from} onChange={setFrom} /></Field>
         {acc && acc !== mainAccountId && (
           <label className="check"><input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
@@ -74,6 +77,7 @@ export function FixedEditor({ id, onClose }: { id: string | null; onClose: () =>
           if (errors.length) return;
           const { undo } = createItem(uid, "fixedExpenses", {
             name: name.trim(), amount: value, start: `${from}-01`, end: null, accountId: acc, categoryId: categoryId || null,
+            countsInBudget: !!categoryId && inBudget,
             isOwnExpense: own && acc !== mainAccountId, revisions: [], payments: {},
           });
           done(`${name.trim()} añadido`, undo);
@@ -356,6 +360,7 @@ export function CardEditor({ id, onClose, accountId }: { id: string | null; onCl
   return (
     <Sheet title={c ? (c.name as string) : "Nueva tarjeta de crédito"} onClose={onClose}>
       <Field label="Nombre"><TextInput value={name} onChange={setName} placeholder="Visa" /></Field>
+      {id && <WalletNames coll="cards" id={id} />}
       <Field label="Se paga desde"><AccountSelect value={acc} onChange={setAcc} include={c?.accountId as string} /></Field>
       {accChanged && <Warn>Las compras ya registradas siguen en {nameOf(docs.accounts, c!.accountId as string)}; solo las nuevas irán a la cuenta nueva.</Warn>}
       <fieldset className="choice"><legend>¿Cuándo se cobra?</legend>

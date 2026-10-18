@@ -448,3 +448,9 @@ details.secondary[open] > summary::after { transform: rotate(225deg); margin-bot
 .guide-code code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 .tour-link { display: block; margin: 14px 0 0; }
 a.btn { text-decoration: none; display: flex; align-items: center; justify-content: center; color: inherit; }
+.wallet-names { margin: 8px 0; font-size: 14px; }
+.wallet-names > span { color: var(--ink-2); }
+.wallet-names ul { list-style: none; padding: 0; margin: 4px 0 0; }
+.wallet-names li { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.guide-h { font-size: 15px; font-weight: 600; margin: 14px 0 0; }
+span.guide-code { display: flex; }

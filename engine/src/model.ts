@@ -41,6 +41,9 @@ export interface FixedExpenseDoc {
   end: IsoDate | null;
   accountId: string | null;
   isOwnExpense: boolean;
+  /** Etiqueta. Con countsInBudget, el gasto fijo cuenta dentro del budget de esa categoría (misma cuenta). */
+  categoryId?: string | null;
+  countsInBudget?: boolean;
   revisions: FixedRevision[];
   payments: Record<Month, FixedPayment>;
 }

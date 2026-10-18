@@ -21,6 +21,8 @@ export interface EOvertime { id: string; salaryId: string; month: Month; gross: 
 export interface EFixed {
   id: string; name: string; amount: number; start: IsoDate; end: IsoDate | null; accountId: string | null;
   isOwn: boolean; revisions: { from: Month; amount?: number; accountId?: string; isOwn?: boolean }[];
+  /** Categoría del budget en el que cuenta (solo si se marcó «cuenta en el budget»). */
+  budgetCategoryId?: string | null;
 }
 export interface EInstance { id: string; fixedId: string; month: Month; status: "pagado" | "impagado"; amount: number | null }
 export interface EBudget {
@@ -124,6 +126,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
     out.fixedExpenses.push({
       id, name: f.name ?? "", amount: f.amount ?? 0, start: f.start, end: f.end ?? null, accountId: f.accountId ?? null,
       isOwn: f.isOwnExpense ?? false,
+      ...(f.countsInBudget && f.categoryId ? { budgetCategoryId: f.categoryId } : {}),
       revisions: (f.revisions ?? []).map((r) => ({
         from: r.from,
         ...("amount" in r && r.amount !== undefined ? { amount: r.amount } : {}),

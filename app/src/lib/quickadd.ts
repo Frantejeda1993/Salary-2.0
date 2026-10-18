@@ -119,3 +119,33 @@ function valid(y: number, mo: number, d: number): string | null {
 export function todayIn(timeZone: string, now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
+
+/**
+ * Nombre de una tarjeta de Wallet (lo que manda el atajo genérico) → con qué se paga en la app.
+ * Se aprende la primera vez: la app guarda el nombre en `walletNames` de la tarjeta o cuenta.
+ */
+export function matchWallet(cards: RawCol, accounts: RawCol, walletName: string | null): string | null {
+  if (!walletName) return null;
+  const t = norm(walletName);
+  const has = (d: Record<string, unknown>) => !d.archived && ((d.walletNames as string[] | undefined) ?? []).some((w) => norm(w) === t);
+  const card = Object.entries(cards).find(([, d]) => has(d));
+  if (card) return `card:${card[0]}`;
+  const acc = Object.entries(accounts).find(([, d]) => has(d));
+  return acc ? `acc:${acc[0]}` : null;
+}
+
+/** Cambios para que `walletName` apunte solo a `payWith`: [colección, id, walletNames nuevos][]. */
+export function walletNameMoves(cards: RawCol, accounts: RawCol, walletName: string, payWith: string): ["cards" | "accounts", string, string[]][] {
+  const t = norm(walletName);
+  const out: ["cards" | "accounts", string, string[]][] = [];
+  const [kind, target] = payWith.startsWith("card:") ? ["cards", payWith.slice(5)] : ["accounts", payWith.slice(4)];
+  for (const [coll, col] of [["cards", cards], ["accounts", accounts]] as const) {
+    for (const [id, d] of Object.entries(col)) {
+      const list = (d.walletNames as string[] | undefined) ?? [];
+      const without = list.filter((w) => norm(w) !== t);
+      const next = coll === kind && id === target ? [...without, walletName.trim()] : without;
+      if (next.length !== list.length || (coll === kind && id === target && !list.some((w) => norm(w) === t))) out.push([coll, id, next]);
+    }
+  }
+  return out;
+}

@@ -6,7 +6,7 @@ import QuickAdd from "./components/QuickAdd";
 import TabBar from "./components/TabBar";
 import Tour from "./components/Tour";
 import { parseAmount } from "./lib/money";
-import { matchByName, parseShortcutDate, type RawCol } from "./lib/quickadd";
+import { matchByName, matchWallet, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
 import Login from "./pages/Login";
 import MonthPage from "./pages/Month";
@@ -72,7 +72,7 @@ function Shell() {
 
 /**
  * Entrada de los atajos: #/nuevo?importe=12,50&comercio=Mercadona&tarjeta=Visa&fecha=2026-10-17
- * (también cuenta=…). Abre el alta rápida rellena; no guarda nada hasta que confirmas.
+ * (también cuenta=…, o wallet=<nombre en Wallet> para el atajo genérico, que la app aprende). Abre el alta rápida rellena; no guarda nada hasta que confirmas.
  */
 function FromShortcut() {
   const { ready, docs } = useData();
@@ -88,7 +88,12 @@ function FromShortcut() {
     let payWith: string | undefined;
     const cardName = p.get("tarjeta");
     const accName = p.get("cuenta");
-    if (cardName) {
+    const wallet = p.get("wallet")?.trim() || undefined;
+    const walletMatch = wallet ? matchWallet(docs.cards as RawCol, docs.accounts as RawCol, wallet) : null;
+    if (wallet) {
+      if (walletMatch) payWith = walletMatch;
+      else notes.push(`Primera vez que pagas con «${wallet}» de Wallet: elige con qué pagaste y lo recordaré.`);
+    } else if (cardName) {
       const id = matchByName(docs.cards as RawCol, cardName);
       if (id) payWith = `card:${id}`; else notes.push(`No encuentro la tarjeta «${cardName}». Elige con qué pagaste.`);
     } else if (accName) {
@@ -97,7 +102,8 @@ function FromShortcut() {
     }
     const date = parseShortcutDate(p.get("fecha")) ?? undefined;
     if (p.get("fecha") && !date) notes.push(`La fecha «${p.get("fecha")}» no es válida; pongo hoy.`);
-    openQuickAdd({ amount: rawAmount, description: p.get("comercio") ?? "", payWith, date, source: "shortcut", notes });
+        const parsed = parseAmount(rawAmount);
+    openQuickAdd({ amount: parsed !== null ? String(parsed.toFixed(2)).replace(".", ",") : rawAmount, description: p.get("comercio") ?? "", payWith, date, source: "shortcut", notes, walletName: wallet, walletMatch });
     navigate("/", { replace: true });
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
   return <div className="splash">Abriendo…</div>;

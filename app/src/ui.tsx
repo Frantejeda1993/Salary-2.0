@@ -10,6 +10,10 @@ export interface QuickAddPrefill {
   edit?: { id: string; data: Record<string, unknown> };
   /** Avisos sobre el atajo (p. ej. una tarjeta que no se encontró). */
   notes?: string[];
+  /** Nombre de la tarjeta en Wallet (atajo genérico): se ofrece recordar con qué se pagó. */
+  walletName?: string;
+  /** Con qué se pagó según lo aprendido (para saber si el usuario lo cambió). */
+  walletMatch?: string | null;
 }
 
 interface UIValue {

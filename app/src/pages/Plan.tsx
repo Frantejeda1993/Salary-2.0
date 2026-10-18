@@ -65,7 +65,7 @@ export default function Plan() {
         <ul className="rows">
           {fixed.length === 0 && <li className="empty">Sin gastos fijos.</li>}
           {fixed.map((f) => <li key={f.id}><button className="what plain" onClick={open("fixed", f.id)}><b>{f.name}</b>
-            <small>{docs.fixedExpenses[f.id]?.categoryId ? `${nameOf(docs.categories, docs.fixedExpenses[f.id].categoryId as string)}, ` : ""}{acc(fixedAccountForMonth(f, m))}{fixedIsOwnForMonth(f, m) ? ", gasto propio" : ""}{starts(f)}{ends(f)}</small>
+            <small>{docs.fixedExpenses[f.id]?.categoryId ? `${nameOf(docs.categories, docs.fixedExpenses[f.id].categoryId as string)}${docs.fixedExpenses[f.id].countsInBudget ? " (dentro del budget)" : ""}, ` : ""}{acc(fixedAccountForMonth(f, m))}{fixedIsOwnForMonth(f, m) ? ", gasto propio" : ""}{starts(f)}{ends(f)}</small>
             <small>{paidLine(f)}</small></button>
             <span className="amt">{formatCents(fixedAmountForMonth(f, m))}</span></li>)}
         </ul>

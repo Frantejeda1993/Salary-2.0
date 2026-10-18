@@ -329,17 +329,23 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
   if (!budgets.length) return null;
   const day = Number(today.slice(8, 10));
   const dim = daysInMonth(month);
+  const fixedNames = (cat: string, acc: string | null) => Object.values(docs.fixedExpenses)
+    .filter((f) => f.countsInBudget && f.categoryId === cat && f.accountId === acc).map((f) => f.name as string).join(", ") || "gastos fijos";
   return <>
     <h2 className="title-sm">Budgets</h2>
     <div className="rows">
       {budgets.map((b) => {
-        const used = core!.rawCategoryExpenses(month, b.accountId).get(b.categoryId as string) ?? 0;
+        const variable = core!.rawCategoryExpenses(month, b.accountId).get(b.categoryId as string) ?? 0;
         const pr = core!.monthProjectedResult(b.accountId!, month, b.accountId === mainAccountId ? carry : 0);
         const detail = pr.budget_details.find((d) => d.budget_id === b.id);
+        const fx = detail?.fixed_in_budget ?? 0;
+        const used = variable + fx;
         const limit = detail?.presupuesto ?? b.amount;
         const absorbed = detail?.absorbed ?? 0;
         const pct = limit > 0 ? Math.min(1, Math.max(0, used) / limit) : 1;
-        const pace = phase === "current" && limit > 0 ? FinanceCore.budgetPace(used, limit, day, dim) : null;
+        // El ritmo se calcula solo con el gasto variable: el fijo no crece con los días.
+        const vpace = phase === "current" && limit > 0 ? FinanceCore.budgetPace(Math.max(0, variable), Math.max(0, limit - fx), day, dim) : null;
+        const pace = vpace ? { ...vpace, forecast: vpace.forecast + fx, status: vpace.forecast + fx > limit ? "por encima del ritmo" : "ok" } : null;
         const over = used > limit;
         const cat = nameOf(docs.categories, b.categoryId, "Sin categoría");
         let text: string;
@@ -356,7 +362,7 @@ function Budgets({ month, phase, carry, today }: { month: Month; phase: string; 
               <i className={`lvl-${budgetLevel(Math.max(0, used), limit)}`} style={{ width: `${pct * 100}%` }} />
               {pace && <u style={{ left: `${pace.elapsed * 100}%` }} title="Hoy" />}
             </div>
-            <p>{text}{absorbed > 0 ? ` ${formatCents(absorbed)} de lo que queda cubre el déficit del mes.` : ""}</p>
+            <p>{text}{fx ? ` Incluye ${formatCents(fx)} de ${fixedNames(b.categoryId as string, b.accountId)}.` : ""}{absorbed > 0 ? ` ${formatCents(absorbed)} de lo que queda cubre el déficit del mes.` : ""}</p>
           </div>
         );
       })}

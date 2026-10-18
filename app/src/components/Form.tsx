@@ -51,6 +51,35 @@ export function CategorySelect({ value, onChange }: { value: string; onChange: (
   );
 }
 
+/**
+ * ¿Un gasto fijo con categoría cuenta dentro del budget de esa categoría? Se pregunta siempre
+ * que hay categoría; avisa si no hay budget de esa categoría en la cuenta desde la que se paga.
+ */
+export function InBudgetChoice({ categoryId, accountId, value, onChange }: {
+  categoryId: string; accountId: string | null; value: boolean; onChange: (v: boolean) => void;
+}) {
+  const { docs, currentMonth } = useData();
+  if (!categoryId) return null;
+  const cat = (docs.categories[categoryId]?.name as string) ?? "esa categoría";
+  const budget = Object.values(docs.budgets).find((b) => b.categoryId === categoryId && b.accountId === accountId
+    && String(b.start).slice(0, 7) <= currentMonth && (!b.end || String(b.end).slice(0, 7) >= currentMonth));
+  return (
+    <div className="field">
+      <span>¿Descuenta del budget de {cat}?</span>
+      <div className="segmented" role="group" aria-label={`¿Descuenta del budget de ${cat}?`}>
+        <button type="button" aria-pressed={value} onClick={() => onChange(true)}>Sí, va dentro</button>
+        <button type="button" aria-pressed={!value} onClick={() => onChange(false)}>No, aparte</button>
+      </div>
+      <small className="hint-text">
+        {value
+          ? "El importe del fijo se resta de lo disponible en el budget; no se reserva dos veces."
+          : "El fijo se reserva aparte y el budget queda entero para los demás gastos."}
+        {!budget && " Ahora no hay budget de esta categoría en la cuenta desde la que se paga, así que de momento no cambia nada."}
+      </small>
+    </div>
+  );
+}
+
 export function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete="off" />;
 }

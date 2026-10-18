@@ -325,3 +325,70 @@ it("las deducciones una a una suman las del desglose", () => {
   expect(lines.reduce((a, l) => a + l.amount, 0)).toBe(core.salaryBreakdown("s1", "2026-04").deducciones);
   expect(lines[0].amount).toBe(12700); // 2.000 € × 6,35 %
 });
+
+describe("Gasto fijo que cuenta en un budget", () => {
+  const ds = (counts: boolean, paid: number | null = null) => ({
+    profile: { settings: { mainAccountId: "m", startMonth: "2026-02" } },
+    docs: {
+      accounts: { m: { name: "M", initialBalance: 0 }, o: { name: "O", initialBalance: 0 } },
+      categories: { casa: { name: "Casa" } },
+      salaries: { s: { accountId: "m", grossMonthly: 3000, deductions: [], start: "2026-02-01", end: null, revisions: [], overtimes: [] } },
+      budgets: { b: { accountId: "m", categoryId: "casa", amount: 1000, start: "2026-02-01", end: null } },
+      fixedExpenses: {
+        rent: { name: "Alquiler", accountId: "m", amount: 700, start: "2026-02-01", end: null, isOwnExpense: false, revisions: [],
+          categoryId: "casa", countsInBudget: counts, payments: paid === null ? {} : { "2026-04": { status: "paid", amount: paid } } },
+      },
+      movements: { e: { type: "expense", date: "2026-04-03", amount: 100, accountId: "m", categoryId: "casa" } },
+    },
+  });
+  const core = (counts: boolean, paid: number | null = null) =>
+    new FinanceCore(fromDataset(ds(counts, paid) as never, { cents: true }), "2026-04", "2026-02", CURRENT_OPTIONS);
+
+  it("sin marcar: fijo y budget se reservan por separado (como siempre)", () => {
+    const p = core(false).monthProjectedResult("m", "2026-04");
+    expect(p.resultado).toBe(300000 - 70000 - 100000);
+    expect(p.budget_details[0].fixed_in_budget).toBeUndefined();
+  });
+  it("marcado: el fijo consume el budget; se reserva el mayor de budget y gasto real", () => {
+    const p = core(true).monthProjectedResult("m", "2026-04");
+    expect(p.resultado).toBe(300000 - 100000);                 // 700 fijo + 300 que quedan de budget
+    expect(p.budget_details[0]).toMatchObject({ fixed_in_budget: 70000, available: 100000 - 70000 - 10000 });
+  });
+  it("marcado y pagado con otro importe: cuenta lo pagado", () => {
+    const p = core(true, 750).monthProjectedResult("m", "2026-04");
+    expect(p.budget_details[0].fixed_in_budget).toBe(75000);
+    expect(p.resultado).toBe(300000 - 100000);
+  });
+  it("si fijo + gastos superan el budget, se reserva lo real", () => {
+    const d = ds(true); (d.docs.movements as Record<string, unknown>).e2 = { type: "expense", date: "2026-04-05", amount: 400, accountId: "m", categoryId: "casa" };
+    const c = new FinanceCore(fromDataset(d as never, { cents: true }), "2026-04", "2026-02", CURRENT_OPTIONS);
+    expect(c.monthProjectedResult("m", "2026-04").resultado).toBe(300000 - 70000 - 50000);
+  });
+  it("saldo previsto del mes en curso: mismo criterio", () => {
+    const a = core(false).projectedBalance("m", "2026-04").resultado;
+    const b = core(true).projectedBalance("m", "2026-04").resultado;
+    expect(a - b).toBe(-70000);
+  });
+  it("no cambia el saldo real", () => {
+    expect(core(true, 750).realBalance("m", "2026-04")).toBe(core(false, 750).realBalance("m", "2026-04"));
+  });
+  it("de otra cuenta: no cuenta en el budget", () => {
+    const d = ds(true); (d.docs.fixedExpenses.rent as Record<string, unknown>).accountId = "o";
+    const c = new FinanceCore(fromDataset(d as never, { cents: true }), "2026-04", "2026-02", CURRENT_OPTIONS);
+    expect(c.fixedInBudget("2026-04", "m").size).toBe(0);
+  });
+});
+
+it("gasto fijo en el budget: con dos budgets de la misma categoría cuenta una sola vez", () => {
+  const mk = (counts: boolean) => new FinanceCore(fromDataset({
+    profile: { settings: { mainAccountId: "m", startMonth: "2026-02" } },
+    docs: {
+      accounts: { m: { name: "M", initialBalance: 0 } }, categories: { casa: { name: "Casa" } },
+      budgets: { b1: { accountId: "m", categoryId: "casa", amount: 1000, start: "2026-02-01", end: null },
+                 b2: { accountId: "m", categoryId: "casa", amount: 200, start: "2026-02-01", end: null } },
+      fixedExpenses: { r: { name: "R", accountId: "m", amount: 700, start: "2026-02-01", end: null, isOwnExpense: false, revisions: [], payments: {}, categoryId: "casa", countsInBudget: counts } },
+    },
+  } as never, { cents: true }), "2026-04", "2026-02", CURRENT_OPTIONS);
+  // sin marcar: 700 + 1000 + 200; marcado: el fijo se come 700 del primero → 700 + 300 + 200
+  expect(mk(false).monthProjectedResult("m", "2026-04").resultado_pre_absorcion - mk(true).monthProjectedResult("m", "2026-04").resultado_pre_absorcion).toBe(-70000);
+});
