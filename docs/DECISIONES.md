@@ -37,6 +37,7 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | B (18-oct-2026) | El «gasto propio» de un gasto fijo puede cambiar a partir de un mes (`FixedRevision.isOwnExpense`). |
 | — | Los gastos propios de cuentas secundarias **siempre se reembolsan desde la cuenta principal**. |
 | — | Un gasto fijo **no marcado como pagado** en un mes cerrado significa que **ese mes no se pagó**. |
+| — | «Este mes no hubo gasto» = pagado a 0 € (como en la app vieja): no resta, no deja reembolso de gasto propio pendiente y no cuenta como mes pagado en «Pagado desde el inicio». |
 | — | El inicio del arrastre se liga a `settings.startMonth` (equivalente a `min_managed_month`). |
 | — | Configuración explícita de tarjetas de crédito (`cards`: cuenta, corte, cobro, dónde se reserva). |
 | — | Un gasto fijo puede, opcionalmente, contar dentro del budget de su categoría (`countsInBudget`, misma cuenta). Cuenta su importe pagado o, si no, el previsto, desde el día 1; se reserva max(budget, variable + fijo) sin duplicar el fijo. Con dos budgets de la misma categoría, solo en el primero. |

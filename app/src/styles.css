@@ -489,3 +489,4 @@ circle.slice { fill: none; }
 .legend .what b { display: flex; align-items: center; gap: 8px; }
 .sw { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; display: inline-block; }
 @media (prefers-reduced-motion: reduce) { .donut .slice { transition: none; } }
+.zero-btn { margin-top: 8px; }

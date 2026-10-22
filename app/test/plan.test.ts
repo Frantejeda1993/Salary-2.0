@@ -88,3 +88,11 @@ describe("paidSinceStart", () => {
     expect(paidSinceStart(undefined, () => 1, "2026-10")).toEqual({ cents: 0, months: 0 });
   });
 });
+
+describe("paidSinceStart con meses sin gasto", () => {
+  it("un pago a 0 € no suma ni cuenta como mes pagado", async () => {
+    const { paidSinceStart } = await import("../src/lib/plan");
+    const pays = { "2026-08": { status: "paid", amount: 0 }, "2026-09": { status: "paid", amount: null } };
+    expect(paidSinceStart(pays, () => 2000, "2026-10")).toEqual({ cents: 2000, months: 1 });
+  });
+});

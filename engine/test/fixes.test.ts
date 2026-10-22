@@ -430,3 +430,20 @@ describe("D · un ingreso con la categoría de un budget es una devolución", ()
     expect(mk(inc(100, "g", "o"), {}).budgetIncomeOffsets("2026-04", "m").size).toBe(0);
   });
 });
+
+it("gasto fijo pagado a 0 € (mes sin gasto): no resta y, si es propio, no deja nada que reembolsar", () => {
+  const mk = (amount: number | null) => new FinanceCore(fromDataset({
+    profile: { settings: { mainAccountId: "m", startMonth: "2026-02", ownExpensesFrom: "2026-02" } },
+    docs: {
+      accounts: { m: { name: "M", initialBalance: 0 }, o: { name: "O", initialBalance: 0 } },
+      salaries: { s: { accountId: "m", grossMonthly: 3000, deductions: [], start: "2026-02-01", end: null, revisions: [], overtimes: [] } },
+      fixedExpenses: { f: { name: "F", accountId: "o", amount: 50, start: "2026-02-01", end: null, isOwnExpense: true, revisions: [],
+        payments: { "2026-03": { status: "paid", amount }, "2026-04": { status: "paid", amount } } } },
+    },
+  } as never, { cents: true }), "2026-04", "2026-02", CURRENT_OPTIONS);
+  const zero = mk(0), normal = mk(null);
+  expect(zero.ownExpensesPending("2026-04", "m").size).toBe(0);
+  expect(normal.ownExpensesPending("2026-04", "m").get("o")).toBe(10000);   // marzo + abril
+  expect(zero.realBalance("o", "2026-04")).toBe(0);
+  expect(zero.monthProjectedResult("o", "2026-04").resultado_pre_absorcion).toBe(0);
+});

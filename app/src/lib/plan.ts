@@ -93,8 +93,9 @@ export function paidSinceStart(
   let total = 0, months = 0;
   for (const [m, p] of Object.entries(payments ?? {})) {
     if (m > until || p?.status !== "paid") continue;
-    total += p.amount != null ? cents(p.amount) : amountCentsForMonth(m);
-    months++;
+    const c = p.amount != null ? cents(p.amount) : amountCentsForMonth(m);
+    total += c;
+    if (c > 0) months++;   // un mes «sin gasto» (pagado a 0) no cuenta como mes pagado
   }
   return { cents: total, months };
 }

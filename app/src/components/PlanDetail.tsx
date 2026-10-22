@@ -290,7 +290,7 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
           <div className="calc-row"><span>Importe</span><span>{formatEuros(amount)}</span></div>
           <div className="calc-row"><span>Se paga desde</span><span>{nameOf(docs.accounts, acc)}</span></div>
           <div className="calc-row"><span>Gasto propio</span><span>{own ? (acc === mainAccountId ? "Sí (en la principal: nada que reembolsar)" : "Sí, se reembolsa") : "No"}</span></div>
-          <div className="calc-row total"><span>Estado</span><span>{thisMonth?.status === "paid" ? `Pagado${thisMonth.amount != null ? ` (${formatEuros(thisMonth.amount)})` : ""}` : "Pendiente"}</span></div>
+          <div className="calc-row total"><span>Estado</span><span>{thisMonth?.status === "paid" ? (thisMonth.amount === 0 ? "Sin gasto este mes" : `Pagado${thisMonth.amount != null ? ` (${formatEuros(thisMonth.amount)})` : ""}`) : "Pendiente"}</span></div>
         </section>
       ) : <p className="muted">{fe.end ? `Terminó en ${monthLong(String(fe.end).slice(0, 7))}.` : `Empieza en ${monthLong(String(fe.start).slice(0, 7))}.`}</p>}
 
@@ -323,7 +323,7 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
               const p = pay[mm];
               const amt = valueInMonth(fe, revs, "amount", mm) as number;
               return <li key={mm}><span className="what"><b>{monthLong(mm)}</b></span>
-                <span className={`amt ${p?.status === "paid" ? "" : "muted"}`}>{p?.status === "paid" ? formatEuros(p.amount ?? amt) : "Sin pagar"}</span></li>;
+                <span className={`amt ${p?.status === "paid" ? "" : "muted"}`}>{p?.status === "paid" ? (p.amount === 0 ? "Sin gasto" : formatEuros(p.amount ?? amt)) : "Sin pagar"}</span></li>;
             })}
           </ul>
         </section>

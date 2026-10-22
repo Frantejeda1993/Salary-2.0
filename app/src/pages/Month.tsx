@@ -26,7 +26,7 @@ type Payment = { status: "paid" | "unpaid"; amount: number | null } & Raw;
 interface Todo {
   key: string; title: string; detail: string; cents: number; late?: boolean;
   button?: string; act?: (euros: number) => Undo; done?: string;
-  sheet?: { title: string; confirm: string; maxCents?: number };
+  sheet?: { title: string; confirm: string; maxCents?: number; zero?: { label: string; note?: string } };
 }
 
 const MONTHS_AHEAD = 12;
@@ -77,7 +77,12 @@ export default function MonthPage() {
     if (fe.estado === "impagado") {
       todos.push({
         key: `fe-${fe.id}`, title: fe.name, detail: `Gasto fijo desde ${accName(fe.account_id)}`, cents: fe.monto,
-        button: "Pagado", sheet: { title: `Pagar ${fe.name}`, confirm: "Marcar pagado" },
+        button: "Pagado", sheet: { title: `Pagar ${fe.name}`, confirm: "Marcar pagado", zero: {
+          label: "Este mes no hubo gasto",
+          note: fe.isOwn && fe.account_id !== main
+            ? `Cuenta como pagado a 0 €: no resta nada y no queda nada que reembolsar a ${accName(fe.account_id)}. Si ya lo reembolsaste, lo que sobra se descuenta del próximo reembolso.`
+            : "Cuenta como pagado a 0 €: no resta nada este mes y deja de aparecer como pendiente.",
+        } },
         act: (euros) => {
           const amount = Math.round(euros * 100) === fe.monto ? null : euros;
           return setFixedPayment(uid, fe.id, month, { ...(prev ?? {}), status: "paid", amount }, prev);
@@ -86,7 +91,7 @@ export default function MonthPage() {
       });
     } else {
       doneItems.push({
-        key: `fe-${fe.id}`, title: fe.name, detail: "Gasto fijo pagado", cents: fe.monto_pagado ?? fe.monto,
+        key: `fe-${fe.id}`, title: fe.name, detail: fe.monto_pagado === 0 ? "Este mes no hubo gasto" : "Gasto fijo pagado", cents: fe.monto_pagado ?? fe.monto,
         button: "Desmarcar", act: () => setFixedPayment(uid, fe.id, month, null, prev), done: `${fe.name}: sin pagar`,
       });
     }
@@ -328,8 +333,8 @@ export default function MonthPage() {
       {spending && phase !== "future" && <SpendingSheet month={month} phase={phase as "past" | "current"} onClose={() => setSpending(false)} />}
       {editing && editing.sheet && (
         <AmountSheet title={editing.sheet.title} detail={editing.detail || undefined} cents={editing.cents} maxCents={editing.sheet.maxCents}
-                     confirm={editing.sheet.confirm} onClose={() => setEditing(null)}
-                     onConfirm={(euros) => done(editing.done!, editing.act!(euros))} />
+                     confirm={editing.sheet.confirm} onClose={() => setEditing(null)} zero={editing.sheet.zero}
+                     onConfirm={(euros) => done(euros === 0 && editing.sheet?.zero ? `${editing.title}: sin gasto este mes` : editing.done!, editing.act!(euros))} />
       )}
     </div>
   );
