@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, type Month } from "@salary/engine";
+import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, reserveMonth, type Month } from "@salary/engine";
 import AmountSheet from "../components/AmountSheet";
 import Fold from "../components/Fold";
 import SpendingSheet from "../components/SpendingSheet";
@@ -165,6 +165,8 @@ export default function MonthPage() {
   // Tarjeta que se cobra este mes en la cuenta principal (compras del mes anterior), aún sin saldar.
   const cardDue = core.creditGroups().filter((g) => g.mes_cargo === month && g.settlement === null && g.account_id === main);
   const cardDueCents = pySum(cardDue.map((g) => g.total));
+  // Lo reservado «al comprar» ya restó en el mes de la compra: aquí no vuelve a restar.
+  const cardDueReserved = pySum(cardDue.flatMap((g) => g.items).filter((e) => reserveMonth(e) < month).map((e) => e.amount ?? 0));
   const cardDueNames = [...new Set(cardDue.map((g) => nameOf(docs.cards, g.card_id ?? `card_${g.account_id}`, "Tarjeta")))].join(", ");
   const loanDetail = [impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : ""]
     .filter(Boolean).join(", ");
@@ -214,8 +216,12 @@ export default function MonthPage() {
       <div className="figures">
         {phase === "future" ? <>
           {hasLoans && <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>}
-          <div><span>Empiezas con</span><strong className={s.remaining_from_previous_month < 0 ? "neg" : ""}>{formatCents(s.remaining_from_previous_month)}</strong></div>
-          <div className="loan-fig"><span>Tarjeta a pagar</span><strong>{formatCents(cardDueCents)}</strong><small>{cardDueCents ? `Compras de ${monthName(addMonths(month, -1))}${cardDueNames ? ` (${cardDueNames})` : ""}` : `Sin compras de ${monthName(addMonths(month, -1))}`}</small></div>
+          <div className="loan-fig"><span>Empiezas con</span><strong className={s.remaining_from_previous_month < 0 ? "neg" : ""}>{formatCents(s.remaining_from_previous_month)}</strong>
+            <small>Lo que sobra de {monthName(addMonths(month, -1))}{cardDueReserved ? ", ya sin la tarjeta" : ""}</small></div>
+          <div className="loan-fig"><span>Tarjeta a pagar</span><strong>{formatCents(cardDueCents)}</strong><small>{!cardDueCents ? `Sin compras de ${monthName(addMonths(month, -1))}`
+              : cardDueReserved === cardDueCents ? `Ya descontada en ${monthName(addMonths(month, -1))}: no restes otra vez`
+              : cardDueReserved ? `${formatCents(cardDueReserved)} ya descontados en ${monthName(addMonths(month, -1))}; el resto, este mes`
+              : `Se descuenta este mes${cardDueNames ? ` (${cardDueNames})` : ""}`}</small></div>
           <div><span>Nómina</span><strong>{formatCents(s.ingreso_total)}</strong></div>
           <div><span>Fijos</span><strong>{formatCents(s.gastos_fijos)}</strong></div>
           <div><span>Budgets</span><strong>{formatCents(s.presupuestos)}</strong></div>
