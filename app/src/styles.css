@@ -490,3 +490,27 @@ circle.slice { fill: none; }
 .sw { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; display: inline-block; }
 @media (prefers-reduced-motion: reduce) { .donut .slice { transition: none; } }
 .zero-btn { margin-top: 8px; }
+
+/* Revisión UI (25-oct-2026): objetivos táctiles ≥ 44 px, anchos y detalles */
+.segmented button { min-height: 44px; }
+.chip { min-width: 44px; }
+.today-chip { min-height: 44px; }
+.icon-btn { flex-shrink: 0; }
+.legend .what.plain { min-height: 44px; justify-content: center; }
+.sheet .btn.wide { max-width: none; }
+.sheet:focus { outline: none; }
+details.done-list summary { list-style: none; display: flex; align-items: center; gap: 8px; }
+details.done-list summary::-webkit-details-marker { display: none; }
+details.done-list summary::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin-bottom: 3px; }
+details.done-list[open] summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+@media (max-width: 359px) {
+  .figures { grid-template-columns: repeat(2, 1fr); }
+  .figures > div:nth-child(n) { border-left: 0; padding-left: 0; }
+  .figures > div:nth-child(2n) { border-left: 1px solid var(--rule); padding-left: 12px; }
+  .figures > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+}
+
+/* Sin conexión */
+.offline { position: sticky; top: var(--safe-top); z-index: 31; margin: -4px 0 8px; padding: 8px 12px; border-radius: 12px; font-size: 14px;
+  background: var(--sheet-2); color: var(--ink); border: 1px solid var(--rule); display: flex; gap: 8px; align-items: flex-start; }
+.offline::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: var(--lvl-mid); margin-top: 6px; flex-shrink: 0; }

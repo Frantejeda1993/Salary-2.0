@@ -5,6 +5,7 @@ import { useData } from "./data";
 import QuickAdd from "./components/QuickAdd";
 import TabBar from "./components/TabBar";
 import Tour from "./components/Tour";
+import OfflineBanner from "./components/OfflineBanner";
 import { parseAmount } from "./lib/money";
 import { matchByName, matchWallet, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
@@ -49,6 +50,7 @@ function Shell() {
   return (
     <div className="app">
       <main className="content">
+        <OfflineBanner />
         <div className={`screen s-${screenOf(loc.pathname)}`} key={loc.pathname}>
         <Routes>
           <Route path="/" element={<MonthPage />} />
