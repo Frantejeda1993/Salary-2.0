@@ -37,6 +37,7 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | B (18-oct-2026) | El «gasto propio» de un gasto fijo puede cambiar a partir de un mes (`FixedRevision.isOwnExpense`). |
 | — | Los gastos propios de cuentas secundarias **siempre se reembolsan desde la cuenta principal**. |
 | — | Un gasto fijo **no marcado como pagado** en un mes cerrado significa que **ese mes no se pagó**. |
+| — | Combustible (26-oct-2026): una categoría puede marcarse `isFuel` (sin marca, lo es si ya tiene repostajes migrados). Sus gastos guardan `fuel: { km, pricePerLiter }` como la app vieja; litros = importe / precio. Al apuntar se compara con la media de los últimos 5 repostajes con km. Un comercio nuevo con nombre de gasolinera propone esa categoría. **No afecta a ningún cálculo de dinero.** |
 | — | «Este mes no hubo gasto» = pagado a 0 € (como en la app vieja): no resta, no deja reembolso de gasto propio pendiente y no cuenta como mes pagado en «Pagado desde el inicio». |
 | — | El inicio del arrastre se liga a `settings.startMonth` (equivalente a `min_managed_month`). |
 | — | Configuración explícita de tarjetas de crédito (`cards`: cuenta, corte, cobro, dónde se reserva). |

@@ -13,7 +13,8 @@ export interface Settings {
 }
 
 export interface AccountDoc { name?: string; initialBalance: number; archived?: boolean }
-export interface CategoryDoc { name?: string; archived?: boolean }
+/** `isFuel`: pide km y precio por litro al apuntar (sin marca, lo es si ya tiene repostajes). Sin efecto en cálculos. */
+export interface CategoryDoc { name?: string; archived?: boolean; isFuel?: boolean }
 
 export interface Deduction { name: string | null; rate: number; appliesToExtras: boolean }
 export interface SalaryRevision { from: Month; gross: number; paidFrom?: Month }
@@ -66,6 +67,8 @@ export interface MovementDoc {
   card?: CardInfo;
   transferKind?: "normal" | "loan" | "loanRepayment" | "ownExpenseRefund";
   loan?: { status: "pending" | "paid"; outstanding: number };
+  /** Repostaje: km hechos desde el anterior y precio por litro (como la app vieja). Sin efecto en cálculos. */
+  fuel?: { km: number; pricePerLiter: number };
 }
 
 export interface CardDoc { name?: string; accountId: string }

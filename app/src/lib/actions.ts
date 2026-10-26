@@ -29,6 +29,7 @@ export type Source = "app" | "shortcut";
 export interface NewExpense {
   type: "expense"; date: string; amount: number; description: string; categoryId: string | null; accountId: string;
   card?: { cardId: string; chargeMonth: string; reserveIn: "purchase" | "charge" };
+  fuel?: { km: number; pricePerLiter: number };
 }
 export interface NewIncome { type: "income"; date: string; amount: number; description: string; categoryId: string | null; accountId: string }
 export interface NewTransfer {
@@ -77,6 +78,7 @@ export function updateMovement(uid: string, id: string, before: Raw, after: Raw,
   const ref = userItem(uid, "movements", id);
   const next: Raw = { ...before, ...after, updatedAt: now() };
   if (next.card === undefined) delete next.card;
+  if (next.fuel === undefined || next.fuel === null) delete next.fuel;
   if (before.transferKind === "loan" && before.loan && after.amount !== before.amount) {
     const l = before.loan as LoanState;
     next.loan = loanAfterAmountChange(before.amount as number, l.outstanding, after.amount as number);

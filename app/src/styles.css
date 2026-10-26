@@ -514,3 +514,15 @@ details.done-list[open] summary::after { transform: rotate(225deg); margin-botto
 .offline { position: sticky; top: var(--safe-top); z-index: 31; margin: -4px 0 8px; padding: 8px 12px; border-radius: 12px; font-size: 14px;
   background: var(--sheet-2); color: var(--ink); border: 1px solid var(--rule); display: flex; gap: 8px; align-items: flex-start; }
 .offline::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: var(--lvl-mid); margin-top: 6px; flex-shrink: 0; }
+
+/* Repostaje en el alta rápida */
+.fuel { margin-top: 12px; padding: 10px 12px 12px; border-radius: 14px; background: var(--sheet-2); }
+.fuel-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.fuel .field { margin: 0; }
+.fuel .field > span { font-size: 13px; }
+.fuel-cmp { margin-top: 10px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.fuel-now { margin: 0 0 4px; font-size: 15px; }
+.fuel-cmp ul { list-style: none; padding: 0; margin: 0 0 4px; }
+.fuel-cmp li.better { color: var(--in); }
+.fuel-cmp li.worse { color: var(--out); }
+.fuel-cmp small { color: var(--ink-2); font-size: 12px; display: block; }

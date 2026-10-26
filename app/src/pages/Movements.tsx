@@ -6,11 +6,21 @@ import ScreenHeader from "../components/ScreenHeader";
 import { useData } from "../data";
 import { dayLong, monthLong, monthName, nameOf } from "../lib/format";
 import { formatEuros } from "../lib/money";
+import { fillFigures } from "../lib/fuel";
 import { isFiltering, matches, NO_CATEGORY, type MovFilter } from "../lib/movfilter";
 import { useUI } from "../ui";
 
 type Raw = Record<string, unknown>;
 const KIND: Record<string, string> = { normal: "Transferencia", loan: "Préstamo", loanRepayment: "Devolución de préstamo", ownExpenseRefund: "Reembolso de gastos propios" };
+
+/** «40,0 L, 6,7 L/100 km» de un repostaje, si tiene datos. */
+function fillFromMovement(m: Raw): string | null {
+  const f = m.fuel as { km?: number; pricePerLiter?: number } | undefined;
+  if (!f || !(Number(f.pricePerLiter) > 0)) return null;
+  const r = fillFigures(Number(m.amount), Number(f.km) || 0, Number(f.pricePerLiter));
+  const n1 = (v: number) => v.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `${n1(r.liters)} L${r.lPer100 !== null ? `, ${n1(r.lPer100)} L/100 km` : ""}`;
+}
 
 export default function Movements() {
   const { ready, docs, currentMonth } = useData();
@@ -53,7 +63,9 @@ export default function Movements() {
   const describe = (m: Raw) => {
     if (m.type === "expense") {
       const card = m.card as { cardId: string; chargeMonth: string } | undefined;
-      return card ? `${nameOf(docs.cards, card.cardId, "Tarjeta")}, se cobra en ${monthName(card.chargeMonth)}` : `${cat(m.categoryId)}, ${acc(m.accountId)}`;
+      const base = card ? `${nameOf(docs.cards, card.cardId, "Tarjeta")}, se cobra en ${monthName(card.chargeMonth)}` : `${cat(m.categoryId)}, ${acc(m.accountId)}`;
+      const f = fillFromMovement(m);
+      return f ? `${base}. ${f}` : base;
     }
     if (m.type === "income") return `Ingreso en ${acc(m.accountId)}`;
     return `${KIND[m.transferKind as string] ?? "Transferencia"}: ${acc(m.accountId)} a ${acc(m.toAccountId)}`;

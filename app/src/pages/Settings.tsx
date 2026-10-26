@@ -13,6 +13,7 @@ import { createItem, patchItem, patchSettings } from "../lib/actions";
 import { groupByBank, monthLong, nameOf, sortedLive } from "../lib/format";
 import { formatCents, formatEuros, parseAmount } from "../lib/money";
 import { useUI } from "../ui";
+import { isFuelCategory } from "../lib/fuel";
 
 // Herramientas del modo prueba: con esta condición literal, Vite elimina el módulo
 // (y los datos sintéticos que carga) de la versión publicada.
@@ -89,7 +90,7 @@ export default function Settings() {
           {categories.map(([id, c]) => (
             <li key={id} className={c.archived ? "archived" : ""}>
               <button className="what plain" onClick={() => setEditing({ kind: "category", id })}>
-                <b>{c.name as string}{c.archived ? " (archivada)" : ""}</b><small>{(catUses.get(id) ?? 0) === 1 ? "1 movimiento" : `${catUses.get(id) ?? 0} movimientos`}</small>
+                <b>{c.name as string}{c.archived ? " (archivada)" : ""}</b><small>{isFuelCategory(id, docs.categories, docs.movements) ? "Combustible, " : ""}{(catUses.get(id) ?? 0) === 1 ? "1 movimiento" : `${catUses.get(id) ?? 0} movimientos`}</small>
               </button>
             </li>
           ))}
@@ -197,6 +198,7 @@ function CategoryEditor({ id, onClose }: { id: string | null; onClose: () => voi
   const { toast } = useUI();
   const c = id ? (docs.categories[id] as Raw) : null;
   const [name, setName] = useState((c?.name as string) ?? "");
+  const [fuel, setFuel] = useState(id ? isFuelCategory(id, docs.categories, docs.movements) : false);
   const dup = Object.entries(docs.categories).some(([cid, x]) => cid !== id && String(x.name).trim().toLowerCase() === name.trim().toLowerCase());
   const budgets = id ? Object.values(docs.budgets).filter((b) => b.categoryId === id && !b.end).length : 0;
   const done = (text: string, undo: () => void) => { toast(text, undo); onClose(); };
@@ -205,9 +207,11 @@ function CategoryEditor({ id, onClose }: { id: string | null; onClose: () => voi
     <Sheet title={c ? (c.name as string) : "Nueva categoría"} onClose={onClose}>
       <Field label="Nombre"><TextInput value={name} onChange={setName} placeholder="Supermercado" /></Field>
       {dup && <Warn>Ya hay una categoría con ese nombre.</Warn>}
+      <label className="check"><input type="checkbox" checked={fuel} onChange={(e) => setFuel(e.target.checked)} />
+        Es de combustible: al apuntar un gasto pide km y precio por litro, y compara el consumo con tus repostajes anteriores</label>
       <button className="btn primary wide save" disabled={!name.trim() || dup} onClick={() => {
-        if (c) done("Categoría guardada", patchItem(uid, "categories", id!, { name: name.trim() }, c));
-        else done("Categoría añadida", createItem(uid, "categories", { name: name.trim(), archived: false, order: Object.keys(docs.categories).length }).undo);
+        if (c) done("Categoría guardada", patchItem(uid, "categories", id!, { name: name.trim(), isFuel: fuel }, c));
+        else done("Categoría añadida", createItem(uid, "categories", { name: name.trim(), isFuel: fuel, archived: false, order: Object.keys(docs.categories).length }).undo);
       }}>{c ? "Guardar" : "Añadir categoría"}</button>
       {c && <>
         {!c.archived && budgets > 0 && <Warn>Tiene {budgets === 1 ? "un budget activo" : `${budgets} budgets activos`}: siguen contando aunque la archives.</Warn>}

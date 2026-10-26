@@ -12,12 +12,40 @@ import {
   type CardLike, type RawCol,
 } from "../lib/quickadd";
 import { monthLong, sortedLive } from "../lib/format";
+import { compareFill, deltaText, fuelCategoriesByUse, fuelHistory, guessFuelCategory, isFuelCategory, parseFuel, suggestedPrice, type FuelInfo } from "../lib/fuel";
 import { useUI, type QuickAddPrefill } from "../ui";
 import Sheet from "./Sheet";
 
 type Kind = "expense" | "income" | "transfer";
 const KIND_LABEL: Record<Kind, string> = { expense: "Gasto", income: "Ingreso", transfer: "Transferencia" };
 const KIND_TEXT: Record<string, string> = { normal: "Transferencia", loan: "Préstamo", loanRepayment: "Devolución de préstamo", ownExpenseRefund: "Reembolso de gastos propios" };
+
+const n1 = (v: number) => v.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const n2 = (v: number) => v.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Litros, consumo y coste por km de este repostaje, frente a la media de los anteriores. */
+function FuelSummary({ cmp, price }: { cmp: ReturnType<typeof compareFill>; price: number }) {
+  const lines: { text: string; better: boolean }[] = [];
+  if (cmp.lPer100 !== null && cmp.avg.lPer100 !== null) lines.push(deltaText(cmp.lPer100, cmp.avg.lPer100, "l100")!);
+  if (cmp.eurPerKm !== null && cmp.avg.eurPerKm !== null) lines.push(deltaText(cmp.eurPerKm, cmp.avg.eurPerKm, "eurkm")!);
+  if (cmp.avg.price !== null) lines.push(deltaText(price, cmp.avg.price, "price")!);
+  return (
+    <div className="fuel-cmp" role="status">
+      <p className="fuel-now">
+        <b>{n1(cmp.liters)} L</b>
+        {cmp.lPer100 !== null && <> · <b>{n1(cmp.lPer100)} L/100 km</b></>}
+        {cmp.eurPerKm !== null && <> · {n2(cmp.eurPerKm)} €/km</>}
+      </p>
+      {lines.length > 0 && (
+        <ul>{lines.map((l) => <li key={l.text} className={l.better ? "better" : "worse"}>{l.better ? "▼" : "▲"} {l.text}</li>)}</ul>
+      )}
+      <small>{cmp.avg.n > 0
+        ? `Frente a la media de ${cmp.avg.n === 1 ? "tu último repostaje" : `tus últimos ${cmp.avg.n} repostajes`} (consumo y €/km) y de los últimos precios.`
+        : cmp.lPer100 === null ? "Pon los km para ver el consumo." : "Es tu primer repostaje con km: la próxima vez verás la comparación."}
+        {cmp.last ? ` Último: ${n1(cmp.last.liters)} L a ${cmp.last.price.toLocaleString("es-ES", { maximumFractionDigits: 3 })} €/L.` : ""}</small>
+    </div>
+  );
+}
 
 export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const { user, profile } = useAuth();
@@ -30,11 +58,14 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const cards = sortedLive(docs.cards);
   const categories = sortedLive(docs.categories);
   const history = useMemo(() => merchantHistory(movements), [movements]);
+  // Solo cuentas y tarjetas activas: un comercio aprendido del histórico (cuentas archivadas)
+  // no debe llevar el gasto a una cuenta que ya no se usa.
+  const livePay = (p: string | null | undefined): string | null =>
+    p && (p.startsWith("card:") ? cards.some(([id]) => `card:${id}` === p) : accounts.some(([id]) => `acc:${id}` === p)) ? p : null;
   const defaultPay = useMemo(() => {
-    const last = lastPayWith(movements);
-    const ok = (p: string | null) => p && (p.startsWith("card:") ? cards.some(([id]) => `card:${id}` === p) : accounts.some(([id]) => `acc:${id}` === p));
-    return ok(last) ? last! : mainAccountId ? `acc:${mainAccountId}` : accounts[0] ? `acc:${accounts[0][0]}` : "";
-  }, [movements, cards, accounts, mainAccountId]);
+    const last = livePay(lastPayWith(movements));
+    return last ?? (mainAccountId ? `acc:${mainAccountId}` : accounts[0] ? `acc:${accounts[0][0]}` : "");
+  }, [movements, cards, accounts, mainAccountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ed = prefill.edit?.data;
   const edCard = ed?.card as { cardId: string; chargeMonth: string; reserveIn: "purchase" | "charge" } | undefined;
@@ -43,9 +74,16 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const [desc, setDesc] = useState(ed ? String(ed.description ?? "") : prefill.description ?? "");
   const [date, setDate] = useState(ed ? (ed.date as string) : prefill.date ?? todayIn(tz));
   const known = ed ? undefined : findMerchant(history, prefill.description ?? "");
-  const [payWith, setPayWith] = useState(ed ? payWithOf(ed) : prefill.payWith ?? known?.payWith ?? defaultPay);
+  const [payWith, setPayWith] = useState(ed ? payWithOf(ed) : livePay(prefill.payWith) ?? livePay(known?.payWith) ?? defaultPay);
   const [payTouched, setPayTouched] = useState(!!prefill.payWith || !!ed);
-  const [categoryId, setCategoryId] = useState<string | null>(ed ? ((ed.categoryId as string | null) ?? null) : known?.categoryId ?? null);
+  const fuelCats = useMemo(() => fuelCategoriesByUse(categories.map(([id]) => id).filter((id) => isFuelCategory(id, docs.categories, movements)), movements),
+    [categories, docs.categories, movements]);
+  const [categoryId, setCategoryId] = useState<string | null>(ed ? ((ed.categoryId as string | null) ?? null)
+    : known?.categoryId ?? guessFuelCategory(prefill.description ?? "", fuelCats));
+  const edFuel = ed?.fuel as FuelInfo | undefined;
+  const [kmRaw, setKmRaw] = useState(edFuel?.km ? String(edFuel.km).replace(".", ",") : "");
+  const [priceRaw, setPriceRaw] = useState(edFuel?.pricePerLiter ? String(edFuel.pricePerLiter).replace(".", ",") : "");
+  const [priceTouched, setPriceTouched] = useState(!!edFuel);
   const [catTouched, setCatTouched] = useState(!!ed);
   const [fromAcc, setFromAcc] = useState(ed?.type === "transfer" ? (ed.accountId as string) : mainAccountId ?? accounts[0]?.[0] ?? "");
   const [toAcc, setToAcc] = useState(ed?.type === "transfer" ? (ed.toAccountId as string) : accounts.find(([id]) => id !== mainAccountId)?.[0] ?? "");
@@ -76,14 +114,29 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
     const m = findMerchant(history, name);
     if (!m) return;
     if (!catTouched) setCategoryId(m.categoryId && docs.categories[m.categoryId] ? m.categoryId : null);
-    if (!payTouched) setPayWith(m.payWith);
+    if (!payTouched) { const p = livePay(m.payWith); if (p) setPayWith(p); }
   }
+  // Comercio nuevo con nombre de gasolinera: se propone la categoría de combustible.
+  function blurMerchant() {
+    pickMerchant(desc);
+    if (!catTouched && !findMerchant(history, desc)) { const g = guessFuelCategory(desc, fuelCats); if (g) setCategoryId(g); }
+  }
+
+  // Repostaje: con categoría de combustible se piden km y precio por litro y se compara.
+  const isFuel = kind === "expense" && fuelCats.includes(categoryId ?? "");
+  const fuelHist = useMemo(() => (isFuel ? fuelHistory(movements, prefill.edit?.id) : []), [isFuel, movements, prefill.edit?.id]);
+  const lastPrice = isFuel ? suggestedPrice(fuelHist, desc) : null;
+  const lastPriceHere = isFuel && fuelHist.some((f) => f.merchant.trim().toLowerCase() === desc.trim().toLowerCase() && desc.trim() !== "");
+  const shownPrice = priceTouched || !lastPrice ? priceRaw : String(lastPrice).replace(".", ",");
+  const fuel = isFuel ? parseFuel(kmRaw, shownPrice) : null;
+  const cmp = isFuel && fuel && fuel !== "invalid" && value ? compareFill(value, fuel.km, fuel.pricePerLiter, fuelHist) : null;
 
   const errors: string[] = [];
   const amountOk = !!(value && value > 0);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push("Elige una fecha.");
   if (kind !== "transfer" && !payWith) errors.push("Elige la cuenta.");
   if (kind === "transfer" && (!fromAcc || !toAcc || fromAcc === toAcc)) errors.push("Elige dos cuentas distintas.");
+  if (fuel === "invalid") errors.push("Revisa los km y el precio por litro (o déjalos vacíos).");
 
   // Atajo genérico: recordar qué tarjeta de Wallet es cada tarjeta o cuenta de la app.
   const walletName = !ed && kind === "expense" ? prefill.walletName : undefined;
@@ -106,6 +159,7 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
       const accountId = card ? (card.accountId as string) : payWith.slice(4);
       m = { type: "expense", date, amount: value, description, categoryId, accountId };
       if (card && cardId && chargeMonth) m.card = { cardId, chargeMonth, reserveIn };
+      if (fuel && fuel !== "invalid") m.fuel = fuel;
     } else if (kind === "income") {
       m = { type: "income", date, amount: value, description, categoryId, accountId: payWith.startsWith("acc:") ? payWith.slice(4) : (card?.accountId as string) };
     } else if (ed) {
@@ -117,7 +171,7 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
       };
     }
     if (prefill.edit && ed) {
-      const after = m.type === "expense" ? { ...m, card: m.card } : m;
+      const after = m.type === "expense" ? { ...m, card: m.card, fuel: m.fuel ?? null } : m;
       const undo = updateMovement(user.uid, prefill.edit.id, ed, after as unknown as Record<string, unknown>, loanDoc);
       closeQuickAdd();
       toast("Cambios guardados", undo);
@@ -161,7 +215,7 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
         {prefill.notes?.map((n) => <p className="warn" key={n}>{n}</p>)}
 
         <label className="field"><span>{kind === "expense" ? "Comercio o concepto" : "Concepto"}</span>
-          <input className="input" value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={() => pickMerchant(desc)}
+          <input className="input" value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={blurMerchant}
                  autoComplete="off" autoCapitalize="sentences" enterKeyHint="done" placeholder={kind === "expense" ? "Mercadona" : ""} />
         </label>
         {suggestions.length > 0 && (
@@ -203,6 +257,19 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
                         onClick={() => { setCategoryId(id); setCatTouched(true); }}>{c.name as string}</button>
               ))}
             </div>
+            {isFuel && (
+              <section className="fuel" aria-label="Repostaje">
+                <div className="fuel-grid">
+                  <label className="field"><span>Km desde el último repostaje</span>
+                    <input className="input" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={kmRaw} onChange={(e) => setKmRaw(e.target.value)} /></label>
+                  <label className="field"><span>Precio por litro</span>
+                    <input className="input" inputMode="decimal" autoComplete="off" placeholder="1,539" value={shownPrice}
+                           onChange={(e) => { setPriceRaw(e.target.value); setPriceTouched(true); }} onFocus={(e) => e.target.select()} /></label>
+                </div>
+                {!priceTouched && lastPrice && <small className="hint-text">{lastPriceHere ? `Precio de tu último repostaje en ${desc.trim()}` : "Precio de tu último repostaje"}: cámbialo si no coincide.</small>}
+                {cmp && fuel && fuel !== "invalid" && <FuelSummary cmp={cmp} price={fuel.pricePerLiter} />}
+              </section>
+            )}
             {kind === "income" && categoryId && refundBudget && (
               <small className="hint-text">Hay un budget de {docs.categories[categoryId]?.name as string} en esta cuenta: este ingreso cuenta como devolución y resta de lo gastado.</small>
             )}
