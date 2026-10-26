@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IconClose } from "./Icons";
 
 /** Hoja inferior modal. Se cierra con el fondo, la X o Escape. */
@@ -26,7 +27,9 @@ export default function Sheet({ title, onClose, children }: { title: string; onC
       if (opener && opener !== document.body && !opener.classList.contains("focus-proxy") && document.contains(opener)) opener.focus({ preventScroll: true });
     };
   }, []);
-  return (
+  // La hoja se pinta fuera de la pantalla (.content), que queda inerte mientras está abierta.
+  // Si se pintara dentro, la hoja heredaría el «inert» y no respondería.
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <section ref={ref} className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
@@ -37,6 +40,7 @@ export default function Sheet({ title, onClose, children }: { title: string; onC
         </header>
         {children}
       </section>
-    </>
+    </>,
+    document.querySelector(".app") ?? document.body,
   );
 }
