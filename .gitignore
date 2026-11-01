@@ -38,3 +38,5 @@ dev-dist/
 # Contexto personal: nunca en el repo público.
 CLAUDE.local.md
 .claude/settings.local.json
+app/playwright-report/
+app/test-results/

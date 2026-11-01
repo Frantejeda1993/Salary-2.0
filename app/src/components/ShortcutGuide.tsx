@@ -30,7 +30,7 @@ function Copy({ text, label }: { text: string; label: string }) {
  * Atajo genérico compartido por iCloud. Vacío: la guía explica cómo crearlo. Debe mandar
  * #/nuevo?wallet=<tarjeta>&importe=<importe>&comercio=<comercio> (cada valor codificado).
  */
-export const SHARED_SHORTCUT_URL = "https://www.icloud.com/shortcuts/da02a87ff6624541b3539918bce7a168";
+export const SHARED_SHORTCUT_URL = "https://www.icloud.com/shortcuts/8857510fbba94769b237cdded978a96a";
 
 export default function ShortcutGuide() {
   const { docs } = useData();
