@@ -3,7 +3,7 @@
  * Sin servidor: la invitación se comparte con el menú del móvil (WhatsApp, email…) y el
  * administrador aprueba desde aquí.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../auth";
 import { IS_MOCK } from "../firebase";
 import { inviteMessage, isAdminEmail, normalizeEmail, requestOrigin, validEmail, type AccessRequest } from "../lib/access";
@@ -41,9 +41,6 @@ export default function AccessSettings() {
   const [lastText, setLastText] = useState<string | null>(null);
   const valid = validEmail(email);
   const pending = all.filter((r) => r.status === "pending");
-  // Se abre sola si hay pendientes, y no se cierra sola al aprobar la última.
-  const [autoOpen, setAutoOpen] = useState(false);
-  useEffect(() => { if (pending.length) setAutoOpen(true); }, [pending.length]);
 
   async function invite() {
     if (!me || !valid) return;
@@ -80,7 +77,7 @@ export default function AccessSettings() {
 
     {admin && (
       <Fold title="Solicitudes de acceso" total={pending.length ? <span className="badge-count">{pending.length}</span> : undefined}
-            sub={pending.length ? "pendientes" : "ninguna pendiente"} open={autoOpen || undefined}>
+            sub={pending.length ? "pendientes" : "ninguna pendiente"} open={pending.length > 0}>
         {pending.length === 0 && <p className="muted small">No hay solicitudes pendientes.</p>}
         {pending.length > 0 && (
           <ul className="rows">

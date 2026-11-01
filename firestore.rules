@@ -74,6 +74,51 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Cuentas compartidas (parejas de 2, ambos consienten). Fase 8b.
+    // Estados: pending (invitación) → active (aceptada) | declined | cancelled; active → ended.
+    // members[0] es quien invita; members[1] se añade al aceptar.
+    match /pairs/{pairId} {
+      function data() { return request.resource.data; }
+      function changed() { return data().diff(resource.data).affectedKeys(); }
+      function isMember() { return request.auth.uid in resource.data.members; }
+      function isInvitee() {
+        return resource.data.status == 'pending' && resource.data.invitedEmail == myEmail();
+      }
+
+      allow create: if invited()
+        && data().members == [request.auth.uid]
+        && data().status == 'pending'
+        && data().invitedBy == request.auth.uid
+        && data().invitedEmail == data().invitedEmail.lower()
+        && data().invitedEmail != myEmail()
+        && data().keys().hasOnly(['members', 'status', 'invitedBy', 'invitedEmail', 'names', 'emails', 'createdAt'])
+        && data().names.keys().hasOnly([request.auth.uid])
+        && data().emails.keys().hasOnly([request.auth.uid]);
+
+      allow read: if invited() && (isMember() || isInvitee());
+
+      allow update: if invited() && (
+        // La persona invitada acepta: entra como segundo miembro.
+        (isInvitee()
+          && data().status == 'active'
+          && data().members == [resource.data.members[0], request.auth.uid]
+          && changed().hasOnly(['status', 'members', 'names', 'emails', 'acceptedAt'])
+          && data().names.diff(resource.data.names).affectedKeys().hasOnly([request.auth.uid])
+          && data().emails.diff(resource.data.emails).affectedKeys().hasOnly([request.auth.uid])
+          && data().emails[request.auth.uid] == myEmail())
+        // …o rechaza.
+        || (isInvitee() && data().status == 'declined' && changed().hasOnly(['status', 'endedAt']))
+        // Quien invitó la cancela mientras está pendiente.
+        || (resource.data.status == 'pending' && resource.data.invitedBy == request.auth.uid
+          && data().status == 'cancelled' && changed().hasOnly(['status', 'endedAt']))
+        // Cualquiera de los dos deja de compartir.
+        || (resource.data.status == 'active' && isMember()
+          && data().status == 'ended' && changed().hasOnly(['status', 'endedAt', 'endedBy']))
+      );
+
+      allow delete: if false;
+    }
+
     // Todo lo demás, cerrado.
     match /{document=**} {
       allow read, write: if false;

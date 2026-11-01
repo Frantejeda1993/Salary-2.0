@@ -149,3 +149,32 @@ test("Acceso: el administrador aprueba solicitudes e invita", async ({ page }) =
   await fold.locator(".rows li", { hasText: "eva@example.com" }).getByRole("button", { name: "Quitar acceso" }).click();
   await expect(fold.locator(".rows").getByText("eva@example.com")).toHaveCount(0);
 });
+
+test("Compartir gastos: aceptar una invitación y dejar de compartir", async ({ page }) => {
+  await openApp(page, { extra: {
+    "pairs/p1": { members: ["ana-uid"], status: "pending", invitedBy: "ana-uid", invitedEmail: "demo@example.com",
+      names: { "ana-uid": "Ana" }, emails: { "ana-uid": "ana@example.com" }, createdAt: "2026-11-01T10:00:00Z" },
+  } });
+  await expect(page.locator(".pair-banner")).toContainText("Ana te invita");
+  await page.locator(".pair-banner").click();
+  const fold = page.locator(".fold", { hasText: "Compartir gastos" });
+  await fold.getByRole("button", { name: "Aceptar" }).click();
+  await expect(fold.locator(".pair-active")).toContainText("Compartes gastos con Ana");
+  await fold.getByRole("button", { name: "Dejar de compartir" }).click();
+  await fold.getByRole("button", { name: "Sí, dejar de compartir" }).click();
+  await expect(fold.getByRole("button", { name: "Invitar a compartir gastos" })).toBeVisible();
+});
+
+test("Compartir gastos: invitar y cancelar", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Ajustes");
+  await page.locator(".fold > summary", { hasText: "Compartir gastos" }).click();
+  const fold = page.locator(".fold", { hasText: "Compartir gastos" });
+  await fold.locator("input[type=email]").fill("demo@example.com");
+  await expect(fold.getByText("No puedes invitarte a ti mismo.")).toBeVisible();
+  await fold.locator("input[type=email]").fill("eva@example.com");
+  await fold.getByRole("button", { name: "Invitar a compartir gastos" }).click();
+  await expect(fold.locator(".pair-active")).toContainText("eva@example.com");
+  await fold.getByRole("button", { name: "Cancelar invitación" }).click();
+  await expect(fold.getByRole("button", { name: "Invitar a compartir gastos" })).toBeVisible();
+});

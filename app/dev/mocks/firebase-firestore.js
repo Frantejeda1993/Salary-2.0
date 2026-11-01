@@ -71,7 +71,8 @@ export function writeBatch() {
 
 export const where = (field, op, value) => ({ field, op, value });
 export function query(col, ...filters) { return { type: "query", path: col.path, filters }; }
-const matches = (data, filters) => filters.every((f) => f.op === "==" && data?.[f.field] === f.value);
+const matches = (data, filters) => filters.every((f) =>
+  f.op === "==" ? data?.[f.field] === f.value : f.op === "array-contains" ? Array.isArray(data?.[f.field]) && data[f.field].includes(f.value) : false);
 export async function getDoc(ref) {
   const data = clone(store[ref.path]);
   return { exists: () => !!data, data: () => data, id: ref.id };

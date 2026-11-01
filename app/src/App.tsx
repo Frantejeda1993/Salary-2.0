@@ -7,6 +7,7 @@ import TabBar from "./components/TabBar";
 import Tour from "./components/Tour";
 import OfflineBanner from "./components/OfflineBanner";
 import { usePendingRequests } from "./components/AccessSettings";
+import { PairsProvider } from "./components/Pairs";
 import { parseAmount } from "./lib/money";
 import { matchByName, matchWallet, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
@@ -24,7 +25,7 @@ export default function App() {
   if (status === "signedOut") return <Login />;
   if (status === "denied") return <Denied />;
   if (status === "needsOnboarding") return <Onboarding />;
-  return <UIProvider><Shell /></UIProvider>;
+  return <UIProvider><PairsProvider><Shell /></PairsProvider></UIProvider>;
 }
 
 const screenOf = (path: string) =>

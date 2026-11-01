@@ -92,3 +92,56 @@ describe("solicitudes de acceso", () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), "accessRequests/luis@example.com")));
   });
 });
+
+describe("cuentas compartidas (pairs)", () => {
+  const EVA = { uid: "eva", email: "eva@example.com" };
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "allowlist/eva@example.com"), {});
+    });
+  });
+  const invite = (by = ANA, to = "eva@example.com") => ({
+    members: [by.uid], status: "pending", invitedBy: by.uid, invitedEmail: to,
+    names: { [by.uid]: "Ana" }, emails: { [by.uid]: by.email }, createdAt: "2026-11-01",
+  });
+  const accepted = (base: ReturnType<typeof invite>, me = EVA) => ({
+    ...base, status: "active", members: [base.members[0], me.uid],
+    names: { ...base.names, [me.uid]: "Eva" }, emails: { ...base.emails, [me.uid]: me.email }, acceptedAt: "2026-11-02",
+  });
+
+  it("un invitado crea la invitación a nombre propio; nadie más", async () => {
+    await assertSucceeds(setDoc(doc(as(ANA), "pairs/p1"), invite()));
+    await assertFails(setDoc(doc(as(LUIS), "pairs/p2"), invite(LUIS)));                       // sin acceso
+    await assertFails(setDoc(doc(as(ANA), "pairs/p3"), { ...invite(), members: [ANA.uid, EVA.uid] }));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p4"), { ...invite(), status: "active" }));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p5"), invite(ANA, "ana@example.com")));      // a sí misma
+    await assertFails(setDoc(doc(as(ANA), "pairs/p6"), { ...invite(), names: { ana: "Ana", eva: "X" } }));
+  });
+  it("la invitación la ven quien invita y la persona invitada; nadie más", async () => {
+    await setDoc(doc(as(ANA), "pairs/p1"), invite());
+    await assertSucceeds(getDoc(doc(as(EVA), "pairs/p1")));
+    await assertSucceeds(getDoc(doc(as(ANA), "pairs/p1")));
+    await assertFails(getDoc(doc(as(ADMIN), "pairs/p1")));
+  });
+  it("la invitada acepta; no puede tocar los datos de quien invita ni entrar otro", async () => {
+    await setDoc(doc(as(ANA), "pairs/p1"), invite());
+    await assertFails(setDoc(doc(as(ADMIN), "pairs/p1"), accepted(invite(), ADMIN)));
+    await assertFails(setDoc(doc(as(EVA), "pairs/p1"), { ...accepted(invite()), names: { ana: "Otra", eva: "Eva" } }));
+    await assertSucceeds(setDoc(doc(as(EVA), "pairs/p1"), accepted(invite())));
+    await assertSucceeds(getDoc(doc(as(EVA), "pairs/p1")));
+  });
+  it("rechazar, cancelar y dejar de compartir", async () => {
+    await setDoc(doc(as(ANA), "pairs/p1"), invite());
+    await assertFails(updateDoc(doc(as(ANA), "pairs/p1"), { status: "declined" }));
+    await assertSucceeds(updateDoc(doc(as(EVA), "pairs/p1"), { status: "declined", endedAt: "x" }));
+    await setDoc(doc(as(ANA), "pairs/p2"), invite());
+    await assertFails(updateDoc(doc(as(EVA), "pairs/p2"), { status: "cancelled", endedAt: "x" }));
+    await assertSucceeds(updateDoc(doc(as(ANA), "pairs/p2"), { status: "cancelled", endedAt: "x" }));
+    await setDoc(doc(as(ANA), "pairs/p3"), invite());
+    await setDoc(doc(as(EVA), "pairs/p3"), accepted(invite()));
+    await assertFails(updateDoc(doc(as(ADMIN), "pairs/p3"), { status: "ended", endedAt: "x", endedBy: "admin" }));
+    await assertSucceeds(updateDoc(doc(as(EVA), "pairs/p3"), { status: "ended", endedAt: "x", endedBy: "eva" }));
+    await assertFails(updateDoc(doc(as(EVA), "pairs/p3"), { status: "active" }));
+    await assertFails(deleteDoc(doc(as(ANA), "pairs/p3")));
+  });
+});

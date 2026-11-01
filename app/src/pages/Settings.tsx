@@ -8,6 +8,7 @@ import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
 import ShortcutGuide, { WalletNames } from "../components/ShortcutGuide";
 import AccessSettings from "../components/AccessSettings";
+import PairSettings from "../components/Pairs";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -61,6 +62,7 @@ export default function Settings() {
         </div>
       </section>
 
+      <PairSettings />
       <AccessSettings />
 
       <Fold title="Cuentas" total={formatCents(liveTotal)} sub={`${liveCount === 1 ? "1 cuenta" : `${liveCount} cuentas`}, hoy`}>

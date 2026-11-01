@@ -15,8 +15,8 @@ Actualizado: 18-oct-2026 (commit `1b4c729`).
 | 6 | Interfaz móvil completa: Mes, alta rápida, Movimientos, Plan editable, Ajustes, onboarding, tour, atajos Apple Pay | **Pendiente de validación de Francisco** |
 | — | Decisiones A, B, C e importador del histórico Excel | Hechas (18-oct) |
 | 7 | Migración final al uid real con `--prune` y retirada de la app vieja | Pendiente |
-| 8a | Acceso por invitación: `allowlist` y `accessRequests` en Firestore, aprobación del administrador en Ajustes, invitar con el menú de compartir; recorridos e2e y tests de reglas en CI | **Pendiente de aprobación** (1-nov) |
-| 8b | Vincular dos cuentas («compartidas», parejas de 2): invitar, confirmar, dejar de compartir | Pendiente |
+| 8a | Acceso por invitación: `allowlist` y `accessRequests` en Firestore, aprobación del administrador en Ajustes, invitar con el menú de compartir; recorridos e2e y tests de reglas en CI | Aprobada (1-nov) |
+| 8b | Vincular dos cuentas (`pairs/{id}`, parejas de 2): invitar (pide también el acceso), aceptar/rechazar, cancelar, dejar de compartir; aviso en Mes | **Pendiente de aprobación** (1-nov) |
 | 8c | Gastos compartidos: reparto fijo o por ingresos del mes, sección en Mes, saldar total/parcial, arrastre | Pendiente (diseño con ejemplos antes de programar) |
 | 8d | App Android (envoltorio de la PWA + lectura de notificaciones elegidas), APK fuera de Play | Pendiente, después de 8c |
 

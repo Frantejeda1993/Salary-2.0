@@ -8,6 +8,7 @@ import { FinanceCore, addMonths, monthOf, outstandingOf, pySum, reserveMonth, ty
 import AmountSheet from "../components/AmountSheet";
 import Fold from "../components/Fold";
 import SpendingSheet from "../components/SpendingSheet";
+import { PairInviteBanner } from "../components/Pairs";
 import ScreenHeader from "../components/ScreenHeader";
 import { IconNext, IconPrev } from "../components/Icons";
 import { useAuth } from "../auth";
@@ -180,6 +181,7 @@ export default function MonthPage() {
         <button onClick={() => go(addMonths(month, 1))} disabled={month >= lastMonth} aria-label="Mes siguiente"><IconNext /></button>
       </div>
       <TodayChip month={month} current={currentMonth} go={go} />
+      <PairInviteBanner />
 
       <section className="closing" aria-label="Resultado del mes">
         {phase === "future" ? <>

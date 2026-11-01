@@ -535,3 +535,15 @@ details.done-list[open] summary::after { transform: rotate(225deg); margin-botto
 .rows .act .btn.small { min-height: 44px; }
 .denied { gap: 12px; text-align: left; max-width: 420px; margin: 0 auto; padding: calc(24px + var(--safe-top)) 16px 24px; }
 .status-card p { margin: 0 0 12px; }
+
+/* Compartir gastos */
+.pair-card { margin: 0 0 12px; }
+.pair-card p { margin: 0 0 8px; }
+.pair-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.pair-actions .btn { min-height: 44px; flex: 1; }
+.pair-actions .warn { flex-basis: 100%; margin: 0; }
+.pair-active p { margin: 0 0 8px; }
+.pair-banner { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; margin: 0 0 12px;
+  padding: 10px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--action) 40%, var(--rule));
+  background: color-mix(in srgb, var(--action) 8%, var(--sheet)); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pair-banner-cta { color: var(--action); font-weight: 600; white-space: nowrap; }
