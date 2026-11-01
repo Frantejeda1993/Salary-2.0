@@ -63,3 +63,15 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
   `TODAY()` se evalúa como en su mes; cada mes debe cuadrar al céntimo o no se escribe nada.
 - Las correcciones manuales viven en un JSON **fuera del repo** (`~/salary-migration/history-fixes.json`).
 - El detalle de qué hoja corresponde a qué cuenta real es dato personal: no va en este repo.
+
+## Acceso y compartir (1-nov-2026)
+
+| Id | Decisión |
+| --- | --- |
+| E1 | Acceso por invitación sin servidor: lista `allowlist/{email}` y solicitudes `accessRequests/{email}` en Firestore; las reglas solo llevan el email del administrador. La invitación se comparte con el menú del móvil (no se envían emails). |
+| E2 | Cualquier cuenta de Google (no solo @gmail.com). |
+| E3 | Cuentas compartidas: parejas de 2, ambos consienten. |
+| E4 | Gasto compartido: para quien paga cuenta solo su parte (el resto, «te deben»); para el otro, su parte es gasto suyo ese mes en la categoría que elija y resta de su previsión aunque no haya pagado. |
+| E5 | Reparto por ingresos: todo lo cobrado de verdad en el mes (nómina e ingresos esporádicos); provisional hasta el cierre y se recalcula si alguien corrige un ingreso de ese mes después. |
+| E6 | Saldar requiere confirmación del que recibe. Editar o borrar un gasto compartido: solo quien lo creó; el otro ve aviso. No se deja de compartir con saldo pendiente. Se puede apuntar «lo pagué yo» o «lo pagó él». |
+

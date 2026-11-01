@@ -69,9 +69,22 @@ export function writeBatch() {
   };
 }
 
+export const where = (field, op, value) => ({ field, op, value });
+export function query(col, ...filters) { return { type: "query", path: col.path, filters }; }
+const matches = (data, filters) => filters.every((f) => f.op === "==" && data?.[f.field] === f.value);
+export async function getDoc(ref) {
+  const data = clone(store[ref.path]);
+  return { exists: () => !!data, data: () => data, id: ref.id };
+}
+
 export function onSnapshot(ref, cb) {
   const run = () => {
-    if (ref.type === "doc") {
+    if (ref.type === "query") {
+      const docs = Object.keys(store).sort()
+        .filter((p) => parentOf(p) === ref.path && matches(store[p], ref.filters))
+        .map((p) => ({ id: p.split("/").pop(), data: () => clone(store[p]) }));
+      cb({ docs, size: docs.length, metadata: { fromCache: false } });
+    } else if (ref.type === "doc") {
       const data = clone(store[ref.path]);
       cb({ exists: () => !!data, data: () => data, id: ref.id, metadata: { fromCache: false } });
     } else {

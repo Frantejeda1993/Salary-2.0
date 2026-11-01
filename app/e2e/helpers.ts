@@ -38,6 +38,7 @@ export async function openApp(page: Page, opts: Parameters<typeof seedStore>[0] 
 
 /** Va a una pestaña y espera a que la pantalla nueva esté montada. */
 export async function tab(page: Page, name: "Mes" | "Movimientos" | "Plan" | "Ajustes") {
-  await page.locator(".tabbar").getByText(name, { exact: true }).click();
+  const cls = { Mes: "t-mes", Movimientos: "t-movimientos", Plan: "t-plan", Ajustes: "t-ajustes" }[name];
+  await page.locator(`.tabbar a.${cls}`).click();
   await page.locator(`.screen-head h1, .screen-head h2`).filter({ hasText: name }).first().waitFor();
 }

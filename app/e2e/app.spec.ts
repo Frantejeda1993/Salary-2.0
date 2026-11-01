@@ -128,3 +128,24 @@ test("Hoja abierta: el foco no sale de ella", async ({ page }) => {
   const inside = await page.evaluate(() => !!document.activeElement?.closest(".sheet") || document.activeElement === document.body);
   expect(inside).toBe(true);
 });
+
+test("Acceso: el administrador aprueba solicitudes e invita", async ({ page }) => {
+  await openApp(page, { extra: {
+    "accessRequests/luis@example.com": { email: "luis@example.com", status: "pending", requestedByUid: "x", requestedByEmail: "ana@example.com", requestedByName: "Ana", createdAt: "2026-11-01T10:00:00Z" },
+  } });
+  await expect(page.locator(".tab-badge")).toHaveText("1");
+  await tab(page, "Ajustes");
+  const fold = page.locator(".fold", { hasText: "Solicitudes de acceso" });
+  await expect(fold.getByText("Lo invita Ana")).toBeVisible();
+  await fold.getByRole("button", { name: "Aprobar" }).click();
+  await expect(page.locator(".tab-badge")).toHaveCount(0);
+  await expect(fold.locator(".rows").getByText("luis@example.com")).toBeVisible();
+
+  await page.locator(".fold > summary", { hasText: "Invitar a alguien" }).click();
+  const inv = page.locator(".fold", { hasText: "Invitar a alguien" });
+  await inv.locator("input[type=email]").fill("Eva@Example.com");
+  await inv.getByRole("button", { name: "Invitar" }).click();
+  await expect(fold.locator(".rows").getByText("eva@example.com")).toBeVisible();
+  await fold.locator(".rows li", { hasText: "eva@example.com" }).getByRole("button", { name: "Quitar acceso" }).click();
+  await expect(fold.locator(".rows").getByText("eva@example.com")).toHaveCount(0);
+});

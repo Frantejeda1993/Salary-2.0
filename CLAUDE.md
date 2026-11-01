@@ -100,6 +100,7 @@ cd app && npm ci
 npm run dev:mock      # Firebase simulado; Ajustes → «Cargar datos de ejemplo» (sintéticos)
 npm run dev           # contra Firebase real salary2-ee33e — evitar salvo petición expresa
 npm test && npm run build   # build = tsc --noEmit + vite build
+npm run e2e                 # recorridos Playwright en modo prueba (en local: PW_CHROMIUM=/opt/pw-browsers/chromium)
 
 # Migración (Python 3.12)
 cd tools/migrate && python -m venv .venv && source .venv/bin/activate
@@ -128,10 +129,11 @@ que toque `app/**` o `engine/src/**`: **un push a main es un despliegue a produc
   tema claro/oscuro del sistema). Textos de interfaz en español, tuteo, sin jerga contable.
 - Commits pequeños, en español, describiendo el «qué» y el porqué de negocio.
 
-## Multiusuario: lo que falta (no lo des por resuelto)
+## Multiusuario
 
-El acceso hoy es una **lista blanca de emails en `firestore.rules`** (`invited()`), con un solo
-email. «Multiusuario» funciona a nivel de datos (cada uno en su `users/{uid}`) y de onboarding,
-pero añadir un usuario exige editar y publicar las reglas a mano. Cualquier propuesta de
-invitaciones/registro abierto debe tratar: coste de Firebase, abuso, borrado de cuenta y datos,
-y que las reglas sigan cerradas por defecto. Propónlo; no lo implementes sin aprobación.
+Acceso por invitación (decisión E1): `allowlist/{email}` (solo administrador) y
+`accessRequests/{email}` en Firestore; en `firestore.rules` solo figura el email del
+administrador. **Nunca pongas emails de usuarios en el repo.** Las reglas se prueban contra el
+emulador en CI (`rules-tests/`, el emulador no se descarga en este entorno). Pendiente: borrado
+de cuenta por el usuario y vigilar el coste. Cuentas compartidas y gastos compartidos: ver
+`docs/DECISIONES.md` (E3–E6) y `docs/ESTADO.md` (8b–8c).

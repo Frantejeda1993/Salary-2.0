@@ -68,6 +68,24 @@ jobs:
           path: app/playwright-report
           retention-days: 7
 
+  rules:
+    name: Reglas de Firestore (emulador)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rules-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
   migrate:
     name: Migración y referencias (Python)
     runs-on: ubuntu-latest

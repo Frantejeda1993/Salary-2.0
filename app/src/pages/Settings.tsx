@@ -7,6 +7,7 @@ import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/For
 import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
 import ShortcutGuide, { WalletNames } from "../components/ShortcutGuide";
+import AccessSettings from "../components/AccessSettings";
 import ScreenHeader from "../components/ScreenHeader";
 import Sheet from "../components/Sheet";
 import { createItem, patchItem, patchSettings } from "../lib/actions";
@@ -59,6 +60,8 @@ export default function Settings() {
           <button className="btn small" onClick={signOut}>Cerrar sesión</button>
         </div>
       </section>
+
+      <AccessSettings />
 
       <Fold title="Cuentas" total={formatCents(liveTotal)} sub={`${liveCount === 1 ? "1 cuenta" : `${liveCount} cuentas`}, hoy`}>
         {groupByBank(accounts).map(({ bank, accounts: list }) => (

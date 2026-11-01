@@ -6,6 +6,7 @@ import QuickAdd from "./components/QuickAdd";
 import TabBar from "./components/TabBar";
 import Tour from "./components/Tour";
 import OfflineBanner from "./components/OfflineBanner";
+import { usePendingRequests } from "./components/AccessSettings";
 import { parseAmount } from "./lib/money";
 import { matchByName, matchWallet, parseShortcutDate, type RawCol } from "./lib/quickadd";
 import Denied from "./pages/Denied";
@@ -36,6 +37,7 @@ function Shell() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { ready } = useData();
+  const pendingRequests = usePendingRequests();
   // Tour: una vez, tras la bienvenida; Ajustes lo vuelve a lanzar con el evento «salary:tour».
   const [tour, setTour] = useState(false);
   const [seen, setSeen] = useState(false);
@@ -65,7 +67,7 @@ function Shell() {
       {/* iOS solo abre el teclado si el foco llega dentro del toque: se enfoca este campo
           invisible al pulsar «+» y la hoja le pasa el foco al importe. */}
       <input ref={proxy} className="focus-proxy" inputMode="decimal" tabIndex={-1} aria-hidden="true" />
-      <TabBar onAdd={() => { proxy.current?.focus(); openQuickAdd(); }} />
+      <TabBar onAdd={() => { proxy.current?.focus(); openQuickAdd(); }} settingsBadge={pendingRequests} />
       {quickAdd && <QuickAdd prefill={quickAdd} />}
       {tour && user && !quickAdd && <Tour uid={user.uid} onClose={() => { setSeen(true); setTour(false); }} />}
     </div>

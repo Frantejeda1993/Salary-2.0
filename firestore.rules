@@ -1,18 +1,32 @@
 rules_version = '2';
 
 // Reglas de seguridad de Salary 2.0.
-// Cerradas desde el primer despliegue: cada usuario solo lee y escribe users/{uid}/...
-// Para invitar a alguien: añade su email a invited() y publica las reglas.
+// Cerradas por defecto: cada usuario solo lee y escribe users/{uid}/...
+//
+// Acceso por invitación (1-nov-2026): la lista de invitados vive en Firestore
+// (allowlist/{email}), no aquí, para no publicar emails en el repositorio. El
+// administrador aprueba desde Ajustes → Solicitudes de acceso. El único email que figura
+// aquí es el del administrador.
+//
 // La migración usa el Admin SDK (service account), que no pasa por estas reglas.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function isAdmin() {
+      return signedIn() && myEmail() == 'frantejeda1993@gmail.com';
+    }
+
     function invited() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in [
-          'frantejeda1993@gmail.com'
-        ];
+      return signedIn()
+        && (isAdmin() || exists(/databases/$(database)/documents/allowlist/$(myEmail())));
     }
 
     function isOwner(uid) {
@@ -31,6 +45,33 @@ service cloud.firestore {
       match /{collection}/{docId} {
         allow read, write: if isOwner(uid) && collection != 'meta';
       }
+    }
+
+    // Lista de invitados: solo la ve y la cambia el administrador.
+    // El id es el email en minúsculas.
+    match /allowlist/{email} {
+      allow read, write: if isAdmin();
+    }
+
+    // Solicitudes de acceso. El id es el email (en minúsculas) de quien quiere entrar.
+    // - Cualquiera con sesión de Google puede pedir acceso para sí mismo.
+    // - Un usuario invitado puede pedirlo para otra persona (invitar).
+    // - Las ve quien la pidió o la persona a la que se refiere; el administrador, todas.
+    // - Solo el administrador las aprueba o rechaza.
+    match /accessRequests/{email} {
+      function validNew() {
+        let d = request.resource.data;
+        return d.email == email
+          && email == email.lower()
+          && d.status == 'pending'
+          && d.requestedByUid == request.auth.uid
+          && d.keys().hasOnly(['email', 'status', 'requestedByUid', 'requestedByEmail', 'requestedByName', 'createdAt', 'note'])
+          && (email == myEmail() || invited());
+      }
+      allow create: if signedIn() && validNew();
+      allow read: if signedIn()
+        && (isAdmin() || resource.data.requestedByUid == request.auth.uid || email == myEmail());
+      allow update, delete: if isAdmin();
     }
 
     // Todo lo demás, cerrado.
