@@ -99,3 +99,30 @@ export function paidSinceStart(
   }
   return { cents: total, months };
 }
+
+// ------------------------------------------------------------------------- corregir y borrar
+
+/**
+ * «Corregir datos» (no es un cambio desde un mes, es arreglar un error): reescribe los datos de
+ * base, así que vale para todos los meses hasta el primer cambio programado. Devuelve el parche.
+ */
+export function salaryCorrection(c: { name: string; gross: number; accountId: string; startMonth: Month; deductions: Raw[] }): Raw {
+  return {
+    name: c.name.trim(), grossMonthly: c.gross, accountId: c.accountId, start: `${c.startMonth}-01`,
+    deductions: c.deductions, deductionRevisions: [],
+  };
+}
+
+export function fixedCorrection(c: { name: string; amount: number; accountId: string; startMonth: Month; isOwnExpense: boolean }): Raw {
+  return { name: c.name.trim(), amount: c.amount, accountId: c.accountId, start: `${c.startMonth}-01`, isOwnExpense: c.isOwnExpense };
+}
+
+/** Pagos marcados antes de un mes (dejarían de contar si el gasto empieza después). */
+export const paymentsBefore = (payments: Record<string, unknown> | undefined, firstMonth: Month): Month[] =>
+  Object.keys(payments ?? {}).filter((m) => m < firstMonth).sort();
+
+/** Qué cambia al borrar: meses ya pasados afectados y pagos marcados que se pierden. */
+export function deleteImpact(item: Raw, currentMonth: Month): { pastFrom: Month | null; payments: Month[] } {
+  const start = String(item.start).slice(0, 7);
+  return { pastFrom: start < currentMonth ? start : null, payments: Object.keys((item.payments as Raw | undefined) ?? {}).sort() };
+}

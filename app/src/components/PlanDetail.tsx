@@ -10,10 +10,11 @@ import { deleteItem, patchItem, type Undo } from "../lib/actions";
 import { monthLong, nameOf } from "../lib/format";
 import { formatCents, formatEuros, parseAmount } from "../lib/money";
 import {
-  canDeleteFixed, endOfMonth, localId, paidSinceStart, paymentsAfter, removeRevision, replaceRevision, valueInMonth, withRevision,
+  deleteImpact, endOfMonth, fixedCorrection, localId, paidSinceStart, paymentsAfter, paymentsBefore, removeRevision, replaceRevision,
+  salaryCorrection, valueInMonth, withRevision,
 } from "../lib/plan";
 import AmountInput from "./AmountInput";
-import { AccountSelect, CategorySelect, Errors, InBudgetChoice, Field, MonthSelect, Warn } from "./Form";
+import { AccountSelect, CategorySelect, Errors, InBudgetChoice, Field, MonthSelect, TextInput, Warn } from "./Form";
 import { IconPencil } from "./Icons";
 import {
   Deductions, euros, pastWarning, rowsToDeds, toRows, useCtx, type DedRow, type Raw, type Rev,
@@ -84,7 +85,7 @@ function FormActions({ onCancel, children }: { onCancel: () => void; children: R
 
 type SalaryMode =
   | { kind: "view" } | { kind: "revision"; from?: Month } | { kind: "overtime"; id?: string }
-  | { kind: "deductions" } | { kind: "end" };
+  | { kind: "deductions" } | { kind: "end" } | { kind: "fix" } | { kind: "delete" };
 
 export function SalaryDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { uid, docs, currentMonth, toast } = useCtx();
@@ -103,6 +104,12 @@ export function SalaryDetail({ id, onClose }: { id: string; onClose: () => void 
   if (mode.kind === "overtime") return <Sheet title={name} onClose={onClose}><OvertimeForm s={s} otId={mode.id} onCancel={back} onSave={(list, text) => patch(text, { overtimes: list })} /></Sheet>;
   if (mode.kind === "deductions") return <Sheet title={name} onClose={onClose}><DeductionsForm s={s} onCancel={back} onSave={(p, text) => patch(text, p)} /></Sheet>;
   if (mode.kind === "end") return <Sheet title={name} onClose={onClose}><EndForm item={s} what="Último mes cobrado" onCancel={back} onSave={(end, text) => patch(text, { end })} /></Sheet>;
+  if (mode.kind === "fix") return <Sheet title={name} onClose={onClose}><SalaryFixForm s={s} onCancel={back} onSave={(p, text) => patch(text, p)} /></Sheet>;
+  if (mode.kind === "delete") {
+    return <Sheet title={name} onClose={onClose}><DeleteForm item={s} what="esta nómina" onCancel={back}
+      consequence="Sus netos dejan de sumar en todos los meses y los saldos cambian."
+      onConfirm={() => { toast("Nómina borrada", deleteItem(uid, "salaries", id, s)); onClose(); }} /></Sheet>;
+  }
 
   const b = core.salaryBreakdown(id, currentMonth);
   const lines = core.salaryDeductionLines(id, currentMonth);
@@ -115,6 +122,10 @@ export function SalaryDetail({ id, onClose }: { id: string; onClose: () => void 
   return (
     <Sheet title="Nómina" onClose={onClose}>
       <EditableName name={name} onSave={(n) => save("Nombre cambiado", patchItem(uid, "salaries", id, { name: n }, s))} />
+      <div className="detail-actions">
+        <button className="btn primary" onClick={() => setMode({ kind: "fix" })}>Corregir datos</button>
+        <button className="btn" onClick={() => setMode({ kind: "revision" })}>Subida desde un mes</button>
+      </div>
       <p className="muted small">Se cobra en {nameOf(docs.accounts, s.accountId as string)}. Desde {monthLong(String(s.start).slice(0, 7))}{s.end ? ` hasta ${monthLong(String(s.end).slice(0, 7))}` : ""}.</p>
       {active ? <Calc title={`Este mes, ${monthLong(currentMonth)}`} rows={rows} total={["Neto", b.neto]} /> : <p className="muted">Esta nómina ya terminó.</p>}
 
@@ -139,10 +150,11 @@ export function SalaryDetail({ id, onClose }: { id: string; onClose: () => void 
         }))} />
 
       <div className="quiet-actions">
-        <button className="link" onClick={() => setMode({ kind: "deductions" })}>Editar deducciones</button>
+        <button className="link" onClick={() => setMode({ kind: "deductions" })}>Cambiar deducciones desde un mes</button>
         {s.end
           ? <button className="link" onClick={() => patch("Reanudada", { end: null })}>Quitar la fecha de fin</button>
           : <button className="link danger" onClick={() => setMode({ kind: "end" })}>Terminar nómina</button>}
+        <button className="link danger" onClick={() => setMode({ kind: "delete" })}>Borrar</button>
       </div>
     </Sheet>
   );
@@ -243,7 +255,7 @@ function EndForm({ item, what, onCancel, onSave, warn }: {
 
 // =============================================================================== gastos fijos
 
-type FixedMode = { kind: "view" } | { kind: "change"; from?: Month } | { kind: "end" };
+type FixedMode = { kind: "view" } | { kind: "change"; from?: Month } | { kind: "end" } | { kind: "fix" } | { kind: "delete" };
 
 export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { uid, docs, currentMonth, mainAccountId, toast } = useCtx();
@@ -256,6 +268,12 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
   const back = () => setMode({ kind: "view" });
   const name = fe.name as string;
 
+  if (mode.kind === "fix") return <Sheet title={name} onClose={onClose}><FixedFixForm fe={fe} onCancel={back} onSave={(p, t) => patch(t, p)} /></Sheet>;
+  if (mode.kind === "delete") {
+    return <Sheet title={name} onClose={onClose}><DeleteForm item={fe} what="este gasto fijo" onCancel={back}
+      consequence="Deja de restar en todos los meses y los saldos de los meses en que se pagó cambian. Si solo ha dejado de pagarse, mejor «Terminar»: así no cambia el pasado."
+      onConfirm={() => { toast("Gasto fijo borrado", deleteItem(uid, "fixedExpenses", id, fe)); onClose(); }} /></Sheet>;
+  }
   if (mode.kind === "change") return <Sheet title={name} onClose={onClose}><FixedChangeForm fe={fe} from={mode.from} onCancel={back} onSave={(r, t) => patch(t, { revisions: r })} /></Sheet>;
   if (mode.kind === "end") {
     return <Sheet title={name} onClose={onClose}><EndForm item={fe} what="Último mes que se paga" onCancel={back} onSave={(end, t) => patch(t, { end })}
@@ -284,6 +302,10 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
   return (
     <Sheet title="Gasto fijo" onClose={onClose}>
       <EditableName name={name} onSave={(n) => save("Nombre cambiado", patchItem(uid, "fixedExpenses", id, { name: n }, fe))} />
+      <div className="detail-actions">
+        <button className="btn primary" onClick={() => setMode({ kind: "fix" })}>Corregir datos</button>
+        <button className="btn" onClick={() => setMode({ kind: "change" })}>Cambio desde un mes</button>
+      </div>
       {active ? (
         <section className="calc" aria-label="Este mes">
           <h4>Este mes, {monthLong(m)}</h4>
@@ -333,7 +355,7 @@ export function FixedDetail({ id, onClose }: { id: string; onClose: () => void }
         {fe.end
           ? <button className="link" onClick={() => patch("Reanudado", { end: null })}>Quitar la fecha de fin</button>
           : <button className="link danger" onClick={() => setMode({ kind: "end" })}>Terminar gasto fijo</button>}
-        {canDeleteFixed(fe) && <button className="link danger" onClick={() => { toast("Gasto fijo borrado", deleteItem(uid, "fixedExpenses", id, fe)); onClose(); }}>Borrar</button>}
+        <button className="link danger" onClick={() => setMode({ kind: "delete" })}>Borrar</button>
       </div>
     </Sheet>
   );
@@ -373,6 +395,102 @@ function FixedChangeForm({ fe, from: editFrom, onCancel, onSave }: {
         <button className="btn primary wide" disabled={!(v && v > 0) || !changes} onClick={() =>
           onSave(cur ? replaceRevision(revs, cur.from, rev) : withRevision(revs, rev), cur ? "Cambio editado" : `Cambio desde ${monthLong(from)}`)}>
           Guardar desde {monthLong(from)}</button>
+      </FormActions>
+    </>
+  );
+}
+
+// =============================================================================== corregir y borrar
+
+/** Texto común: corregir no es un cambio desde un mes. */
+function FixIntro({ what, start, revs }: { what: string; start: Month; revs: number }) {
+  const { currentMonth } = useCtx();
+  return <>
+    <p className="muted small">Para arreglar un dato mal puesto: vale para todos los meses{revs ? " hasta el primer cambio programado" : ""}, desde {monthLong(start)}. Si {what} cambia de verdad a partir de un mes (una subida, otra cuenta), usa «{what === "la nómina" ? "Subida desde un mes" : "Cambio desde un mes"}»: así el pasado no cambia.</p>
+    {start < currentMonth && <Warn>Cambia también los meses ya cerrados desde {monthLong(start)}.</Warn>}
+  </>;
+}
+
+function SalaryFixForm({ s, onCancel, onSave }: { s: Raw; onCancel: () => void; onSave: (p: Raw, text: string) => void }) {
+  const [name, setName] = useState((s.name as string) ?? "");
+  const [gross, setGross] = useState(euros(s.grossMonthly));
+  const [acc, setAcc] = useState((s.accountId as string) ?? "");
+  const [start, setStart] = useState<Month>(String(s.start).slice(0, 7));
+  const [rows, setRows] = useState<DedRow[]>(toRows((s.deductions as Raw[] | undefined) ?? []));
+  const dedRevs = (s.deductionRevisions as Rev[] | undefined) ?? [];
+  const revs = (s.revisions as Rev[] | undefined) ?? [];
+  const v = parseAmount(gross);
+  const { deds, errors } = rowsToDeds(rows);
+  const all = [...errors, ...(!name.trim() ? ["Ponle un nombre."] : []), ...(!(v && v > 0) ? ["El bruto debe ser mayor que 0."] : []), ...(!acc ? ["Elige la cuenta."] : [])];
+  return (
+    <>
+      <h3 className="form-title">Corregir datos de la nómina</h3>
+      <FixIntro what="la nómina" start={start < String(s.start).slice(0, 7) ? start : String(s.start).slice(0, 7)} revs={revs.length} />
+      <Field label="Nombre"><TextInput value={name} onChange={setName} /></Field>
+      <Field label="Bruto mensual" hint={revs.length ? `Es el bruto inicial: las subidas (${revs.length}) siguen igual.` : undefined}>
+        <AmountInput value={gross} onChange={setGross} ariaLabel="Bruto mensual" /></Field>
+      <Field label="Se cobra en"><AccountSelect value={acc} onChange={setAcc} include={acc} /></Field>
+      <Field label="Primer mes cobrado"><MonthSelect value={start} onChange={setStart} back={36} /></Field>
+      <h4 className="guide-h">Deducciones (% sobre el bruto)</h4>
+      <Deductions rows={rows} setRows={setRows} />
+      {dedRevs.length > 0 && <Warn>Sustituye también los cambios de deducciones programados ({dedRevs.map((r) => monthLong(r.from)).join(", ")}): estas valdrán para todos los meses.</Warn>}
+      <Errors list={all} />
+      <FormActions onCancel={onCancel}>
+        <button className="btn primary wide" disabled={all.length > 0} onClick={() =>
+          onSave(salaryCorrection({ name, gross: v!, accountId: acc, startMonth: start, deductions: deds }), "Nómina corregida")}>Guardar corrección</button>
+      </FormActions>
+    </>
+  );
+}
+
+function FixedFixForm({ fe, onCancel, onSave }: { fe: Raw; onCancel: () => void; onSave: (p: Raw, text: string) => void }) {
+  const { docs, mainAccountId } = useCtx();
+  const [name, setName] = useState((fe.name as string) ?? "");
+  const [amount, setAmount] = useState(euros(fe.amount));
+  const [acc, setAcc] = useState((fe.accountId as string) ?? "");
+  const [start, setStart] = useState<Month>(String(fe.start).slice(0, 7));
+  const [own, setOwn] = useState(!!fe.isOwnExpense);
+  const revs = (fe.revisions as Rev[] | undefined) ?? [];
+  const v = parseAmount(amount);
+  const lost = paymentsBefore(fe.payments as Raw, start);
+  const errors = [...(!name.trim() ? ["Ponle un nombre."] : []), ...(!(v && v > 0) ? ["El importe debe ser mayor que 0."] : []), ...(!acc ? ["Elige la cuenta."] : [])];
+  return (
+    <>
+      <h3 className="form-title">Corregir datos del gasto fijo</h3>
+      <FixIntro what="el gasto" start={start < String(fe.start).slice(0, 7) ? start : String(fe.start).slice(0, 7)} revs={revs.length} />
+      <Field label="Nombre"><TextInput value={name} onChange={setName} /></Field>
+      <Field label="Importe cada mes" hint={revs.length ? `Es el importe inicial: los cambios programados (${revs.length}) siguen igual.` : undefined}>
+        <AmountInput value={amount} onChange={setAmount} ariaLabel="Importe" /></Field>
+      <Field label="Se paga desde"><AccountSelect value={acc} onChange={setAcc} include={acc} /></Field>
+      <Field label="Primer mes"><MonthSelect value={start} onChange={setStart} back={36} /></Field>
+      {acc && acc !== mainAccountId && (
+        <label className="check"><input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
+          Es un gasto propio: lo reembolsas desde {nameOf(docs.accounts, mainAccountId)}</label>
+      )}
+      {lost.length > 0 && <Warn>Tiene pagos marcados antes ({lost.map(monthLong).join(", ")}): dejarían de contar.</Warn>}
+      <Errors list={errors} />
+      <FormActions onCancel={onCancel}>
+        <button className="btn primary wide" disabled={errors.length > 0} onClick={() =>
+          onSave(fixedCorrection({ name, amount: v!, accountId: acc, startMonth: start, isOwnExpense: own && acc !== mainAccountId }), "Gasto fijo corregido")}>Guardar corrección</button>
+      </FormActions>
+    </>
+  );
+}
+
+/** Confirmar un borrado explicando qué cambia. Se puede deshacer desde el aviso. */
+function DeleteForm({ item, what, consequence, onCancel, onConfirm }: {
+  item: Raw; what: string; consequence: string; onCancel: () => void; onConfirm: () => void;
+}) {
+  const { currentMonth } = useCtx();
+  const impact = deleteImpact(item, currentMonth);
+  return (
+    <>
+      <h3 className="form-title">¿Borrar {what}?</h3>
+      <p>{consequence}</p>
+      {impact.pastFrom && <Warn>Cambian los meses ya cerrados desde {monthLong(impact.pastFrom)}.</Warn>}
+      {impact.payments.length > 0 && <Warn>Se borran también {impact.payments.length === 1 ? "el pago marcado" : `los ${impact.payments.length} pagos marcados`} ({impact.payments.map(monthLong).join(", ")}).</Warn>}
+      <FormActions onCancel={onCancel}>
+        <button className="btn wide danger-btn" onClick={onConfirm}>Sí, borrar</button>
       </FormActions>
     </>
   );

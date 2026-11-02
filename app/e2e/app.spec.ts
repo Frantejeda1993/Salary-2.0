@@ -94,6 +94,48 @@ test("Plan: fichas de nómina y gasto fijo", async ({ page }) => {
   await expectClosed(page);
 });
 
+test("Plan: corregir y borrar una nómina", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Plan");
+  await page.locator(".fold > summary", { hasText: "Nómina" }).click();
+  const first = page.locator(".fold[open] .rows .what.plain").first();
+  const name = (await first.locator("b").textContent()) ?? "";
+  await first.click();
+  await sheet(page).getByRole("button", { name: "Corregir datos" }).click();
+  await sheet(page).getByLabel("Bruto mensual").fill("2.345,67");
+  await sheet(page).getByRole("button", { name: "Añadir deducción" }).click();
+  await sheet(page).getByLabel("Concepto").last().fill("Prueba e2e");
+  await sheet(page).getByLabel("Porcentaje de Prueba e2e").fill("1,5");
+  await sheet(page).getByRole("button", { name: "Guardar corrección" }).click();
+  await expect(page.locator(".toast")).toContainText("Nómina corregida");
+  await expect(sheet(page).locator(".base-line")).toContainText("2.345,67");
+  await expect(sheet(page).locator(".calc")).toContainText("Prueba e2e");
+  await sheet(page).getByRole("button", { name: "Borrar" }).click();
+  await sheet(page).getByRole("button", { name: "Sí, borrar" }).click();
+  await expectClosed(page);
+  await expect(page.locator(".toast")).toContainText("Nómina borrada");
+  await expect(page.locator(".fold[open] .rows").getByText(name, { exact: true })).toHaveCount(0);
+});
+
+test("Plan: corregir y borrar un gasto fijo con pagos", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Plan");
+  await page.locator(".fold > summary", { hasText: "Gastos fijos" }).click();
+  const first = page.locator(".fold[open] .rows .what.plain").first();
+  await first.click();
+  await sheet(page).getByRole("button", { name: "Corregir datos" }).click();
+  await sheet(page).getByLabel("Importe").fill("99,99");
+  await sheet(page).getByRole("button", { name: "Guardar corrección" }).click();
+  await expect(page.locator(".toast")).toContainText("Gasto fijo corregido");
+  await sheet(page).getByRole("button", { name: "Borrar" }).click();
+  await expect(sheet(page)).toContainText("¿Borrar este gasto fijo?");
+  await sheet(page).getByRole("button", { name: "Sí, borrar" }).click();
+  await expectClosed(page);
+  await expect(page.locator(".toast")).toContainText("Gasto fijo borrado");
+  await page.locator(".toast").getByRole("button", { name: "Deshacer" }).click();
+  await expect(page.locator(".toast")).toContainText("Deshecho");
+});
+
 test("Ajustes: categoría, cuenta y tarjeta", async ({ page }) => {
   await openApp(page);
   await tab(page, "Ajustes");

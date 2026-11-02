@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  canDeleteFixed, endOfMonth, loanAfterAmountChange, loanAfterRepayment, monthChoices, paymentsAfter, valueInMonth, withRevision,
+  canDeleteFixed, deleteImpact, endOfMonth, fixedCorrection, loanAfterAmountChange, loanAfterRepayment, monthChoices, paymentsAfter, paymentsBefore,
+  salaryCorrection, valueInMonth, withRevision,
 } from "../src/lib/plan";
 
 describe("revisiones", () => {
@@ -94,5 +95,22 @@ describe("paidSinceStart con meses sin gasto", () => {
     const { paidSinceStart } = await import("../src/lib/plan");
     const pays = { "2026-08": { status: "paid", amount: 0 }, "2026-09": { status: "paid", amount: null } };
     expect(paidSinceStart(pays, () => 2000, "2026-10")).toEqual({ cents: 2000, months: 1 });
+  });
+});
+
+describe("corregir y borrar (Plan)", () => {
+  it("corregir una nómina reescribe la base y quita los cambios de deducciones", () => {
+    const p = salaryCorrection({ name: " Trabajo ", gross: 2100, accountId: "a1", startMonth: "2026-10", deductions: [{ name: "IRPF", rate: 0.12, appliesToExtras: true }] });
+    expect(p).toEqual({ name: "Trabajo", grossMonthly: 2100, accountId: "a1", start: "2026-10-01",
+      deductions: [{ name: "IRPF", rate: 0.12, appliesToExtras: true }], deductionRevisions: [] });
+  });
+  it("corregir un gasto fijo y avisar de pagos que quedarían fuera", () => {
+    expect(fixedCorrection({ name: "Alquiler", amount: 700, accountId: "a1", startMonth: "2026-11", isOwnExpense: false }))
+      .toEqual({ name: "Alquiler", amount: 700, accountId: "a1", start: "2026-11-01", isOwnExpense: false });
+    expect(paymentsBefore({ "2026-09": {}, "2026-11": {} }, "2026-10")).toEqual(["2026-09"]);
+  });
+  it("qué se pierde al borrar", () => {
+    expect(deleteImpact({ start: "2026-09-01", payments: { "2026-10": {}, "2026-09": {} } }, "2026-11")).toEqual({ pastFrom: "2026-09", payments: ["2026-09", "2026-10"] });
+    expect(deleteImpact({ start: "2026-12-01" }, "2026-11")).toEqual({ pastFrom: null, payments: [] });
   });
 });

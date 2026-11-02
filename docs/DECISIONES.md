@@ -42,7 +42,7 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | — | El inicio del arrastre se liga a `settings.startMonth` (equivalente a `min_managed_month`). |
 | — | Configuración explícita de tarjetas de crédito (`cards`: cuenta, corte, cobro, dónde se reserva). |
 | — | Un gasto fijo puede, opcionalmente, contar dentro del budget de su categoría (`countsInBudget`, misma cuenta). Cuenta su importe pagado o, si no, el previsto, desde el día 1; se reserva max(budget, variable + fijo) sin duplicar el fijo. Con dos budgets de la misma categoría, solo en el primero. |
-| — | Un gasto fijo con pagos no se borra: se termina. Editar el importe de un préstamo conserva lo devuelto. |
+| — | Un gasto fijo con pagos no se borra: se termina. Editar el importe de un préstamo conserva lo devuelto. **Sustituida el 2-nov-2026**: ver «Plan: corregir y borrar». |
 
 ## Migración
 
@@ -86,4 +86,13 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | E10 | Cada uno elige su categoría para su parte; si no elige, la app propone la suya de igual nombre que la de quien lo apuntó. Las categorías y las cuentas de cada uno no se comparten. | Programado |
 | E11 | Lo pagaste tú y no has dicho con qué (lo apuntó tu pareja, o borraste tu movimiento): la previsión ya lo descuenta entero y te aparece en «Por hacer» para elegir cuenta o tarjeta; el saldo real cambia al elegirla. | Programado |
 | E12 | Si pagas un gasto compartido desde una cuenta que no es la principal, la parte de tu pareja se descuenta en esa cuenta y lo que te debe se refleja en la principal. | Limitación conocida |
+
+## Plan: corregir y borrar (2-nov-2026, a petición de Francisco tras las pruebas con usuarios nuevos)
+
+| Regla |
+| --- |
+| Nómina y gasto fijo tienen dos acciones distintas: **Corregir datos** (arreglar un error: reescribe los datos de base —importe, cuenta, primer mes, deducciones, gasto propio— y vale para todos los meses hasta el primer cambio programado) y **Cambio / subida desde un mes** (lo de siempre: el pasado no cambia). |
+| Corregir las deducciones de una nómina sustituye también sus cambios de deducciones programados, y se avisa antes. |
+| Nómina y gasto fijo **se pueden borrar siempre**, también con pagos marcados, tras una confirmación que dice qué meses cerrados cambian y qué pagos se pierden. Se puede deshacer desde el aviso. |
+| Toda corrección o borrado que toca meses cerrados lo avisa antes de guardar. |
 

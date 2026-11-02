@@ -563,3 +563,4 @@ details.done-list[open] summary::after { transform: rotate(225deg); margin-botto
 .install-steps li { margin: 6px 0; }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
 .autopay-tabs { margin: 0 4px 14px; }
+.detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
