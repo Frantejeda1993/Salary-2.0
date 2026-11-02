@@ -35,7 +35,8 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Tests del lector de pagos
-        run: gradle --no-daemon testDebugUnitTest > ../gradle-test.log 2>&1 || { tail -n 60 ../gradle-test.log | sed 's/^/::error title=Tests::/' ; exit 1; }
+        run: |
+          gradle --no-daemon testDebugUnitTest > ../gradle-test.log 2>&1 || { tail -n 60 ../gradle-test.log | sed 's/^/::error title=Tests::/' ; exit 1; }
 
       - name: Clave de firma
         id: key
@@ -57,11 +58,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease > ../gradle-build.log 2>&1 || { grep -E "error|FAILURE|What went wrong|e: |\.java:[0-9]+" ../gradle-build.log | head -n 40 | sed 's/^/::error title=Compilación::/' ; tail -n 30 ../gradle-build.log | sed 's/^/::error title=Final del registro::/' ; exit 1; }
+        run: |
+          gradle --no-daemon assembleRelease > ../gradle-build.log 2>&1 || { grep -E "error|FAILURE|What went wrong|e: |\.java:[0-9]+" ../gradle-build.log | head -n 40 | sed 's/^/::error title=Compilación::/' ; tail -n 30 ../gradle-build.log | sed 's/^/::error title=Final del registro::/' ; exit 1; }
 
       - name: Compilar sin firmar (comprobación)
         if: steps.key.outputs.signed != 'true'
-        run: gradle --no-daemon assembleDebug > ../gradle-build.log 2>&1 || { grep -E "error|FAILURE|What went wrong|e: |\.java:[0-9]+" ../gradle-build.log | head -n 40 | sed 's/^/::error title=Compilación::/' ; tail -n 30 ../gradle-build.log | sed 's/^/::error title=Final del registro::/' ; exit 1; }
+        run: |
+          gradle --no-daemon assembleDebug > ../gradle-build.log 2>&1 || { grep -E "error|FAILURE|What went wrong|e: |\.java:[0-9]+" ../gradle-build.log | head -n 40 | sed 's/^/::error title=Compilación::/' ; tail -n 30 ../gradle-build.log | sed 's/^/::error title=Final del registro::/' ; exit 1; }
 
       - name: Publicar en Releases
         if: steps.key.outputs.signed == 'true'
