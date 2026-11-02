@@ -2,6 +2,7 @@
  * Acceso por invitación (1-nov-2026). Lógica pura: validar y normalizar emails, saber quién
  * administra y redactar la invitación. Las reglas de Firestore son las que de verdad mandan.
  */
+import { APK_URL } from "./platform";
 export const ADMIN_EMAIL = "frantejeda1993@gmail.com";
 
 export const normalizeEmail = (e: string) => e.trim().toLowerCase();
@@ -31,6 +32,9 @@ export function inviteMessage(appUrl: string, inviter: string, approved: boolean
     approved
       ? "Ya tienes acceso: al entrar te guía para configurar tus cuentas."
       : "He pedido tu acceso; en cuanto se apruebe podrás entrar con ese mismo email.",
+    `En Android, instala la app para apuntar los pagos al momento: ${APK_URL}`,
+    "En iPhone, ábrela en Safari y toca Compartir → «Añadir a pantalla de inicio».",
+    "Dentro, en Ajustes → «Apuntar pagos automáticamente», tienes la guía para tu móvil.",
   ].join("\n\n");
 }
 

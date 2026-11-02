@@ -11,6 +11,8 @@
     <string name="step_access">1. Permiso para leer notificaciones</string>
     <string name="access_on">Activado</string>
     <string name="access_off">Desactivado: Salary no puede ver tus pagos.</string>
+    <string name="restricted_help">Si Android dice «Ajuste restringido»: Ajustes → Aplicaciones → Salary → menú ⋮ (arriba a la derecha) → «Permitir ajustes restringidos». Después vuelve a activarlo.</string>
+    <string name="restricted_button">Abrir la información de la app</string>
     <string name="access_grant">Activar en Ajustes de Android</string>
     <string name="access_change">Revisar en Ajustes de Android</string>
     <string name="step_post">2. Permiso para avisarte</string>

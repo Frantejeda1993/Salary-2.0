@@ -6,8 +6,8 @@ import AmountInput from "../components/AmountInput";
 import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/Form";
 import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
-import ShortcutGuide, { WalletNames } from "../components/ShortcutGuide";
-import AndroidGuide from "../components/AndroidGuide";
+import { WalletNames } from "../components/ShortcutGuide";
+import AutoPayGuide from "../components/AutoPayGuide";
 import { currentPlatform } from "../lib/platform";
 import AccessSettings from "../components/AccessSettings";
 import PairSettings from "../components/Pairs";
@@ -106,13 +106,8 @@ export default function Settings() {
         <button className="btn wide ghost fold-add" onClick={() => setEditing({ kind: "category", id: null })}>Añadir categoría</button>
       </Fold>
 
-      {platform === "other" && (
-        <Fold title="Apuntar al pagar con Apple Pay" sub="iPhone, con Atajos">
-          <ShortcutGuide />
-        </Fold>
-      )}
-      <Fold title="Android" sub={platform === "android-app" ? "Avisos de pago" : "App para apuntar al pagar"}>
-        <AndroidGuide platform={platform} />
+      <Fold title="Apuntar pagos automáticamente" sub="iPhone y Android">
+        <AutoPayGuide platform={platform} />
       </Fold>
 
       <button className="link tour-link" onClick={() => window.dispatchEvent(new Event("salary:tour"))}>Ver el tour de la app</button>

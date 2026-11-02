@@ -23,7 +23,7 @@ export const TOUR_STEPS: TourStep[] = [
   { target: ".tabbar .t-plan", title: "Plan",
     text: "Nómina, gastos fijos y budgets. Cada cambio vale desde el mes que elijas: los meses anteriores no se tocan." },
   { target: ".tabbar .t-ajustes", title: "Ajustes",
-    text: "Cuentas, tarjetas de crédito y categorías. Ahí también está la guía para que el iPhone abra el gasto ya rellenado al pagar con Apple Pay." },
+    text: "Cuentas, tarjetas de crédito y categorías. Ahí también está la guía para apuntar los pagos automáticamente, en iPhone y en Android." },
 ];
 
 type Rect = { top: number; left: number; width: number; height: number };

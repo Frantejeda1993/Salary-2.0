@@ -32,10 +32,13 @@ Descarga (siempre la última): <https://github.com/Frantejeda1993/Salary-2.0/rel
 
 ## Instalar (amigos)
 
-1. Desde el móvil, abrir Salary en Chrome → Ajustes → Android → «Descargar la app (APK)».
+1. Recibir la invitación (Ajustes → Invitar a alguien): el mensaje ya trae el enlace del APK. O
+   desde el móvil, Salary en Chrome → Ajustes → «Apuntar pagos automáticamente» → Android → Descargar.
 2. Permitir instalar desde el navegador y, si Play Protect avisa, «Instalar de todas formas».
-3. Abrir Salary → Ajustes → Android → «Configurar avisos de pago»: activar el acceso a
-   notificaciones, el permiso de avisos y enviar un aviso de prueba.
+3. Abrir Salary → Ajustes → «Apuntar pagos automáticamente» → Android → «Configurar avisos de
+   pago»: activar el acceso a notificaciones, el permiso de avisos y enviar un aviso de prueba.
+   En Android 13+ el acceso sale como «Ajuste restringido» (APK fuera de Play): Ajustes →
+   Aplicaciones → Salary → ⋮ → «Permitir ajustes restringidos» y volver a activarlo.
 4. Xiaomi, Huawei y algunos Samsung cierran apps en segundo plano: quitar Salary del ahorro de batería.
 
 ## Cuando algo no funcione

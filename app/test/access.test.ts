@@ -19,6 +19,7 @@ describe("acceso por invitación", () => {
     expect(m).toContain("https://x/app/");
     expect(m).toContain("He pedido tu acceso");
     expect(inviteMessage("u", "Ana", true)).toContain("Ya tienes acceso");
+    expect(inviteMessage("u", "Ana", true)).toContain("releases/latest/download/salary.apk");
   });
   it("origen de la solicitud", () => {
     const base = { email: "luis@x.com", status: "pending" as const, requestedByUid: "a", createdAt: "" };

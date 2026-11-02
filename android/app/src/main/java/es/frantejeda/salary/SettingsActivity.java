@@ -67,6 +67,12 @@ public class SettingsActivity extends Activity {
         text(access ? getString(R.string.access_on) : getString(R.string.access_off), 15, true);
         button(access ? getString(R.string.access_change) : getString(R.string.access_grant), v ->
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)));
+        if (!access && Build.VERSION.SDK_INT >= 33) {
+            // Apps instaladas fuera de Google Play: Android bloquea este permiso hasta desbloquearlo a mano.
+            text(getString(R.string.restricted_help), 13, false);
+            button(getString(R.string.restricted_button), v -> startActivity(
+                new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
+        }
 
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             section(getString(R.string.step_post));
