@@ -65,7 +65,9 @@ export interface MovementDoc {
   accountId: string | null;
   toAccountId?: string | null;
   card?: CardInfo;
-  transferKind?: "normal" | "loan" | "loanRepayment" | "ownExpenseRefund";
+  transferKind?: "normal" | "loan" | "loanRepayment" | "ownExpenseRefund" | "sharedSettlement";
+  /** 8c: pago entre la pareja (saldar gastos compartidos); id del pago en pairs/{id}/settlements. */
+  sharedSettlementId?: string;
   loan?: { status: "pending" | "paid"; outstanding: number };
   /** Repostaje: km hechos desde el anterior y precio por litro (como la app vieja). Sin efecto en cálculos. */
   fuel?: { km: number; pricePerLiter: number };
@@ -88,7 +90,28 @@ export interface Docs {
   cardSettlements: Record<string, CardSettlementDoc>;
 }
 
+/**
+ * 8c: un gasto compartido visto por este usuario. Lo calcula la app a partir de la lista de la
+ * pareja (pairs/{id}/shared) y de users/{uid}/sharedLinks: el motor no ve los datos del otro.
+ */
+export interface SharedLine {
+  id: string;
+  /** Mes del gasto (fecha del gasto compartido). */
+  month: Month;
+  /** Lo pagué yo (si no, lo pagó mi pareja). */
+  paidByMe: boolean;
+  /** Mi movimiento de gasto con el que lo pagué, si ya lo registré. */
+  movementId: string | null;
+  /** Mi parte y la de mi pareja, en euros. Suman el importe. */
+  ownPart: number;
+  otherPart: number;
+  /** Mi categoría para mi parte (cuando no hay movimiento mío). */
+  categoryId: string | null;
+}
+
 export interface Dataset {
   profile: { settings: Settings };
   docs: Docs;
+  /** 8c: gastos compartidos. Sin ellos ninguna cifra cambia. */
+  shared?: SharedLine[];
 }

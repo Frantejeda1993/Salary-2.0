@@ -42,8 +42,16 @@ export interface ETransfer {
   isLoan: boolean; status: "pending" | "paid"; outstanding: number | null;
   /** Reembolso de gasto propio: transferKind 'ownExpenseRefund' (o la descripción automática de la app vieja). */
   isOwnRefund?: boolean;
+  /** 8c: pago entre la pareja al saldar gastos compartidos (transferKind 'sharedSettlement'). */
+  isSharedSettlement?: boolean;
 }
 export interface ESettlement { id: string; accountId: string; chargeMonth: Month; date: IsoDate; amount: number; cardId?: string }
+
+/** 8c: un gasto compartido desde el punto de vista de este usuario (ver SharedLine en model.ts). */
+export interface ESharedLine {
+  id: string; month: Month; paidByMe: boolean; movementId: string | null;
+  ownPart: number; otherPart: number; categoryId: string | null;
+}
 
 export interface EngineData {
   settings?: { ownExpensesFrom?: Month };
@@ -57,6 +65,8 @@ export interface EngineData {
   incomes: EIncome[];
   transfers: ETransfer[];
   settlements: ESettlement[];
+  /** 8c: gastos compartidos (vacío o ausente: ninguna cifra cambia). */
+  shared?: ESharedLine[];
 }
 
 const byId = <T extends { id: string }>(a: T, b: T) => cmp(a.id, b.id);
@@ -91,6 +101,7 @@ export function toCents(e: EngineData): EngineData {
     incomes: e.incomes.map((x) => ({ ...x, amount: c(x.amount) })),
     transfers: e.transfers.map((t) => ({ ...t, amount: c(t.amount), outstanding: cn(t.outstanding) })),
     settlements: e.settlements.map((s) => ({ ...s, amount: c(s.amount) })),
+    ...(e.shared ? { shared: e.shared.map((l) => ({ ...l, ownPart: c(l.ownPart), otherPart: c(l.otherPart) })) } : {}),
   };
 }
 
@@ -166,6 +177,7 @@ function fromDatasetEuros(ds: Dataset): EngineData {
         id, date: m.date, amount: m.amount, from: m.accountId ?? null, to: m.toAccountId ?? null,
         description: m.description ?? "", isLoan,
         isOwnRefund: m.transferKind === "ownExpenseRefund" || m.description === "Transferencia automatica gastos",
+        ...(m.transferKind === "sharedSettlement" ? { isSharedSettlement: true } : {}),
         status: m.loan?.status ?? "pending", outstanding: m.loan ? m.loan.outstanding : null,
       });
     }
@@ -175,5 +187,11 @@ function fromDatasetEuros(ds: Dataset): EngineData {
     out.settlements.push({ id: s.legacy?.id || id, accountId: s.accountId, chargeMonth: s.chargeMonth, date: s.date, amount: s.amount, ...(s.cardId ? { cardId: s.cardId } : {}) });
   }
   out.settlements.sort(byId);
+  if (ds.shared?.length) {
+    out.shared = [...ds.shared].sort(byId).map((l) => ({
+      id: l.id, month: l.month, paidByMe: l.paidByMe, movementId: l.movementId ?? null,
+      ownPart: l.ownPart, otherPart: l.otherPart, categoryId: l.categoryId ?? null,
+    }));
+  }
   return out;
 }

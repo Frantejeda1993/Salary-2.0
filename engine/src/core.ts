@@ -12,7 +12,7 @@
  * los ficheros de fixtures/reference); con CURRENT_OPTIONS es el motor corregido.
  * Ver docs en engine/README.md y la especificación (registro de decisiones).
  */
-import type { EBudget, EExpense, EngineData, ESalary, ESettlement, ETransfer } from "./data";
+import type { EBudget, EExpense, EngineData, ESalary, ESettlement, ESharedLine, ETransfer } from "./data";
 import { addMonths, isActiveInMonth, monthOf, monthRange, type IsoDate, type Month } from "./months";
 import { cmp, pyMax, pyMin, pySum } from "./pymath";
 
@@ -150,7 +150,14 @@ export interface DeductionLine { name: string; rate: number; amount: number }
 export interface SalaryBreakdown { base: number; atrasos: number; horas_extra: number; deducciones: number; neto: number }
 export interface ProjectedResult {
   resultado: number; resultado_pre_absorcion: number; budget_details: BudgetDetail[]; deuda_tarjeta_arrastrada: number;
+  /** 8c: lo que debías a tu pareja al empezar el mes (solo en la principal, en meses no futuros). */
+  deuda_compartida_arrastrada?: number;
+  /** 8c: lo que adelantaste a tu pareja en el mes y aún no te ha devuelto (no se cuenta como tuyo). */
+  adelantado_compartido?: number;
 }
+
+/** 8c: posición con tu pareja al final de un mes. neto > 0: debes; < 0: te deben. */
+export interface SharedPosition { neto: number; debes: number; te_deben: number }
 export interface CreditGroup {
   account_id: string | null; mes_cargo: Month; total: number; items: EExpense[]; settlement: ESettlement | null;
   /** Con perCardSettlement: la tarjeta del grupo. */
@@ -262,8 +269,10 @@ export class FinanceCore {
     return pySum(this.data.incomes.filter((x) => x.accountId === accountId && monthOf(x.date) === month).map((x) => x.amount));
   }
 
-  private sumTransfers(field: "from" | "to", accountId: string, month: Month): number {
-    return pySum(this.data.transfers.filter((x) => x[field] === accountId && monthOf(x.date) === month).map((x) => x.amount));
+  private sumTransfers(field: "from" | "to", accountId: string, month: Month, skipShared = false): number {
+    return pySum(this.data.transfers
+      .filter((x) => x[field] === accountId && monthOf(x.date) === month && !(skipShared && x.isSharedSettlement))
+      .map((x) => x.amount));
   }
 
   // ----- salarios
@@ -406,8 +415,83 @@ export class FinanceCore {
           raw.set(cat, (raw.get(cat) ?? 0) + (exp.amount ?? 0));
         }
       }
+      this.applySharedConsumption(raw, month, accountId);
       return raw;
     });
+  }
+
+  // ----- 8c: gastos compartidos
+
+  private expenseById(id: string): EExpense | undefined {
+    return this.memo("exp-by-id", () => new Map(this.data.expenses.map((e) => [e.id, e]))).get(id);
+  }
+
+  /** Mi movimiento de un gasto compartido que pagué yo (si existe y es un gasto). */
+  private sharedMovement(l: ESharedLine): EExpense | undefined {
+    return l.paidByMe && l.movementId ? this.expenseById(l.movementId) : undefined;
+  }
+
+  /**
+   * Las categorías y los budgets cuentan solo tu parte de cada gasto compartido:
+   *   - lo pagaste tú (con movimiento): la parte de tu pareja se resta de la categoría del movimiento;
+   *   - lo pagó tu pareja, o lo pagaste tú y aún no registraste con qué: tu parte se suma a tu
+   *     categoría en la cuenta principal, en el mes del gasto.
+   */
+  private applySharedConsumption(raw: Map<string, number>, month: Month, accountId: string | null) {
+    const lines = this.data.shared;
+    if (!lines?.length) return;
+    const main = this.data.accounts.find((a) => a.isMain)?.id ?? null;
+    for (const l of lines) {
+      const mv = this.sharedMovement(l);
+      if (mv) {
+        if (accrualMonth(mv) !== month || (accountId && mv.accountId !== accountId)) continue;
+        const cat = mv.categoryId ?? "";
+        raw.set(cat, (raw.get(cat) ?? 0) - l.otherPart);
+      } else {
+        if (l.month !== month || (accountId && accountId !== main)) continue;
+        const cat = l.categoryId ?? "";
+        raw.set(cat, (raw.get(cat) ?? 0) + l.ownPart);
+      }
+    }
+  }
+
+  /**
+   * Movimientos de la posición con la pareja por mes (céntimos): + lo que pasas a deber, − lo que
+   * te pasan a deber. Tu parte de lo que pagó ella (+), su parte de lo que pagaste tú (−), lo que le
+   * pagas al saldar (−) y lo que te paga (+).
+   */
+  private sharedDeltas(): Map<Month, number> {
+    return this.memo("shared-deltas", () => {
+      const out = new Map<Month, number>();
+      const add = (m: Month, v: number) => out.set(m, (out.get(m) ?? 0) + v);
+      for (const l of this.data.shared ?? []) {
+        if (l.paidByMe) {
+          const mv = this.sharedMovement(l);
+          add(mv ? accrualMonth(mv) : l.month, -l.otherPart);
+        } else {
+          add(l.month, l.ownPart);
+        }
+      }
+      for (const t of this.data.transfers) {
+        if (!t.isSharedSettlement) continue;
+        if (t.from) add(monthOf(t.date), -t.amount);
+        else if (t.to) add(monthOf(t.date), t.amount);
+      }
+      return out;
+    });
+  }
+
+  /** Posición con la pareja al final de `month` (acumulada desde el principio). */
+  sharedPosition(month: Month): SharedPosition {
+    return this.memo(`spos|${month}`, () => {
+      let neto = 0;
+      for (const [m, v] of this.sharedDeltas()) if (m <= month) neto += v;
+      return { neto, debes: pyMax(0, neto), te_deben: pyMax(0, -neto) };
+    });
+  }
+
+  private hasShared(): boolean {
+    return !!this.data.shared?.length || this.data.transfers.some((t) => t.isSharedSettlement);
   }
 
   pendingLoansForAccount(accountId: string, month: Month | null = null): ETransfer[] {
@@ -546,8 +630,9 @@ export class FinanceCore {
 
   monthProjectedResult(accountId: string, month: Month, remainingFromPrevious = 0): ProjectedResult {
     return this.memo(`mpr|${accountId}|${month}|${remainingFromPrevious}`, () => {
-      const income = this.salariesFor(accountId, month) + this.sumIncomes(accountId, month) + this.sumTransfers("to", accountId, month);
-      const transfersOut = this.sumTransfers("from", accountId, month);
+      // 8c: los pagos entre la pareja no cambian la previsión: saldan una deuda que ya restaba.
+      const income = this.salariesFor(accountId, month) + this.sumIncomes(accountId, month) + this.sumTransfers("to", accountId, month, true);
+      const transfersOut = this.sumTransfers("from", accountId, month, true);
       const fixedTotal = pySum(
         this.fixedExpensesForMonth(month)
           .filter((fe) => fe.account_id === accountId)
@@ -582,11 +667,33 @@ export class FinanceCore {
       const budgetCats = new Set(budgets.map((b) => b.categoryId));
       const nonBudgeted = pySum([...raw].filter(([cat]) => !budgetCats.has(cat)).map(([, v]) => v));
       const creditCarried = this.creditDebtCarriedInto(accountId, month);
+      const shared = this.sharedProjectionTerms(accountId, month);
 
-      const pre = income - offsetIncome + remainingFromPrevious - fixedTotal - budgetImpact - nonBudgeted - transfersOut - creditCarried;
+      const pre = income - offsetIncome + remainingFromPrevious - fixedTotal - budgetImpact - nonBudgeted - transfersOut - creditCarried
+        - shared.carried - shared.advanced;
       const resultado = absorbDeficit(pre, details, true, this.opts.cents);
-      return { resultado, resultado_pre_absorcion: pre, budget_details: details, deuda_tarjeta_arrastrada: creditCarried };
+      return {
+        resultado, resultado_pre_absorcion: pre, budget_details: details, deuda_tarjeta_arrastrada: creditCarried,
+        ...(shared.carried ? { deuda_compartida_arrastrada: shared.carried } : {}),
+        ...(shared.advanced ? { adelantado_compartido: shared.advanced } : {}),
+      };
     });
+  }
+
+  /**
+   * 8c, en la cuenta principal. Las categorías ya cuentan solo tu parte; además:
+   *   - carried: en el mes actual y anteriores, lo que debías a tu pareja al empezar el mes (el
+   *     arrastre de meses cerrados es caja y esa deuda aún no ha salido de ella), como la tarjeta;
+   *   - advanced: lo que pasa a deberte tu pareja en el mes (su parte de lo que pagaste). Salió de
+   *     tu cuenta y no se cuenta como tuyo hasta que te lo devuelva.
+   * Equivale a: previsión = caja − lo que debes; lo que te deben no suma hasta que lo cobras.
+   */
+  private sharedProjectionTerms(accountId: string, month: Month): { carried: number; advanced: number } {
+    const main = this.data.accounts.find((a) => a.isMain)?.id;
+    if (accountId !== main || !this.hasShared()) return { carried: 0, advanced: 0 };
+    const prev = this.sharedPosition(addMonths(month, -1));
+    const now = this.sharedPosition(month);
+    return { carried: month <= this.currentMonth ? prev.debes : 0, advanced: now.te_deben - prev.te_deben };
   }
 
   remainingFromPreviousMonth(month: Month, mainAccountId: string): number {
@@ -688,7 +795,9 @@ export class FinanceCore {
         if (effective < amount) pendingBudget += amount - effective;
       }
       const creditPending = this.creditOutstanding(accountId, target, true);
-      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending, details, false, this.opts.cents)
+      // 8c: lo que debes a tu pareja al cierre (aún no ha salido de la cuenta).
+      const sharedDebt = accountId === this.data.accounts.find((a) => a.isMain)?.id && this.hasShared() ? this.sharedPosition(target).debes : 0;
+      const resultado = absorbDeficit(real - fixedPending - pendingBudget - creditPending - sharedDebt, details, false, this.opts.cents)
         + this.ownRefundAdjustment(accountId, target);
       return { resultado, budget_details: details };
     });
