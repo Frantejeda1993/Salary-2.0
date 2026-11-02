@@ -37,6 +37,17 @@ npm run delta     # usa tu último ~/salary-migration/reference/real-*.json
 Aplica las correcciones una a una y lista las cifras que cambian (resultado real y
 proyectado, arrastre, saldos), con el detalle completo en un CSV junto al fichero.
 
+## Fase 8c — gastos compartidos
+
+`Dataset.shared` (`SharedLine[]`): cada gasto compartido visto por este usuario (mi parte, la del
+otro, si lo pagué yo y con qué movimiento). Lo calcula la app; el motor no ve datos del otro.
+
+- Categorías y budgets cuentan solo tu parte (`rawCategoryExpenses`).
+- `sharedPosition(mes)`: lo que debes (`debes`) o te deben (`te_deben`) al final del mes, con las
+  deudas de los dos compensadas y los pagos entre la pareja (`transferKind: "sharedSettlement"`).
+- Previsión = caja − lo que debes; lo que te deben no suma hasta cobrarlo. Los pagos entre la
+  pareja no mueven la previsión. Sin líneas compartidas, ninguna cifra cambia (`test/shared.test.ts`).
+
 ## Base: Fase 4a — port 1:1 de la app vieja
 
 `src/core.ts` es una traducción línea a línea de `services/finance_core.py`

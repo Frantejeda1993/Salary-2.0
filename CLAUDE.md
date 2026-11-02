@@ -5,8 +5,9 @@ repo `Frantejeda1993/Salary`) como **PWA móvil multiusuario**: React 19 + Vite 
 (Auth con Google, Firestore con caché offline), publicada en GitHub Pages:
 <https://frantejeda1993.github.io/Salary-2.0/>. Proyecto Firebase: `salary2-ee33e`.
 
-El dueño (Francisco) usa la app vieja **a diario** con sus datos reales. Todo lo que hagas
-debe permitir migrar esos datos de forma verificable y sin perder ni alterar una sola cifra.
+Migración hecha: **Salary 2.0 es la app oficial de Francisco** desde octubre de 2026, con sus datos
+reales. Todo cambio de cálculo afecta a su dinero de verdad: sin regresiones, con tests, y
+cualquier cambio de cifras explicado y aprobado antes.
 
 Idioma: **español** en código (comentarios, nombres de UI), commits, docs y respuestas.
 
@@ -136,4 +137,10 @@ Acceso por invitación (decisión E1): `allowlist/{email}` (solo administrador) 
 administrador. **Nunca pongas emails de usuarios en el repo.** Las reglas se prueban contra el
 emulador en CI (`rules-tests/`, el emulador no se descarga en este entorno). Pendiente: borrado
 de cuenta por el usuario y vigilar el coste. Cuentas compartidas y gastos compartidos: ver
-`docs/DECISIONES.md` (E3–E6) y `docs/ESTADO.md` (8b–8c).
+`docs/DECISIONES.md` (E3–E12), `docs/DISENO-8C.md` y `docs/ESTADO.md`.
+
+Gastos compartidos (8c): `pairs/{id}/shared|settlements|incomes` (los ven los dos) y
+`users/{uid}/sharedLinks` (lo privado: mi categoría y mi movimiento). La app convierte la lista
+de la pareja en `SharedLine` para el motor (`app/src/lib/shared.ts` → `engineLines`); el motor
+nunca ve datos del otro. **Las reglas de Firestore no se despliegan solas**: tras cambiarlas,
+Francisco las publica en Firebase Console (Firestore → Reglas → pegar `firestore.rules` → Publicar).

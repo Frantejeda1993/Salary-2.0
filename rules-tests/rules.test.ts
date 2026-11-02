@@ -145,3 +145,74 @@ describe("cuentas compartidas (pairs)", () => {
     await assertFails(deleteDoc(doc(as(ANA), "pairs/p3")));
   });
 });
+
+describe("gastos compartidos (8c)", () => {
+  const EVA = { uid: "eva", email: "eva@example.com" };
+  const pair = (status = "active") => ({
+    members: [ANA.uid, EVA.uid], status, invitedBy: ANA.uid, invitedEmail: EVA.email,
+    names: { ana: "Ana", eva: "Eva" }, emails: { ana: ANA.email, eva: EVA.email }, createdAt: "2026-11-01", acceptedAt: "2026-11-02",
+  });
+  const gasto = (o: Record<string, unknown> = {}) => ({
+    date: "2026-11-05", description: "Súper", amount: 100, paidBy: ANA.uid, createdBy: ANA.uid,
+    split: { mode: "equal" }, categoryName: "Comida", createdAt: "2026-11-05T10:00:00Z", ...o,
+  });
+  const pago = (o: Record<string, unknown> = {}) => ({ date: "2026-11-20", amount: 30, from: EVA.uid, to: ANA.uid, status: "pending", createdAt: "x", ...o });
+  const seed = async (status = "active", extra: Record<string, Record<string, unknown>> = {}) =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "allowlist/eva@example.com"), {});
+      await setDoc(doc(ctx.firestore(), "pairs/p1"), pair(status));
+      for (const [path, data] of Object.entries(extra)) await setDoc(doc(ctx.firestore(), path), data);
+    });
+
+  it("los dos miembros apuntan y ven gastos; nadie más", async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(ANA), "pairs/p1/shared/g1"), gasto()));
+    await assertSucceeds(setDoc(doc(as(EVA), "pairs/p1/shared/g2"), gasto({ createdBy: EVA.uid })));   // «lo pagó Ana»
+    await assertSucceeds(getDoc(doc(as(EVA), "pairs/p1/shared/g1")));
+    await assertFails(getDoc(doc(as(ADMIN), "pairs/p1/shared/g1")));
+    await assertFails(setDoc(doc(as(ADMIN), "pairs/p1/shared/g3"), gasto({ createdBy: ADMIN.uid, paidBy: ADMIN.uid })));
+  });
+  it("datos válidos: a nombre propio, pagador de la pareja, importe positivo, sin campos extra", async () => {
+    await seed();
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/x1"), gasto({ createdBy: EVA.uid })));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/x2"), gasto({ paidBy: "luis" })));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/x3"), gasto({ amount: 0 })));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/x4"), gasto({ accountId: "acc1" })));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/x5"), gasto({ split: { mode: "magic" } })));
+  });
+  it("solo quien lo creó lo edita o lo borra", async () => {
+    await seed("active", { "pairs/p1/shared/g1": gasto() });
+    await assertFails(updateDoc(doc(as(EVA), "pairs/p1/shared/g1"), { amount: 1 }));
+    await assertFails(deleteDoc(doc(as(EVA), "pairs/p1/shared/g1")));
+    await assertSucceeds(updateDoc(doc(as(ANA), "pairs/p1/shared/g1"), { amount: 120, updatedAt: "x", updatedBy: ANA.uid }));
+    await assertFails(updateDoc(doc(as(ANA), "pairs/p1/shared/g1"), { createdBy: EVA.uid }));
+    await assertSucceeds(deleteDoc(doc(as(ANA), "pairs/p1/shared/g1")));
+  });
+  it("con la pareja terminada no se apunta nada, pero se sigue viendo", async () => {
+    await seed("ended", { "pairs/p1/shared/g1": gasto() });
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/shared/g2"), gasto()));
+    await assertSucceeds(getDoc(doc(as(EVA), "pairs/p1/shared/g1")));
+  });
+  it("saldar: paga quien envía, confirma o rechaza quien recibe; quien paga puede cancelar", async () => {
+    await seed();
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/settlements/s0"), pago()));                       // a nombre de Eva
+    await assertFails(setDoc(doc(as(EVA), "pairs/p1/settlements/s0"), pago({ status: "confirmed" })));
+    await assertFails(setDoc(doc(as(EVA), "pairs/p1/settlements/s0"), pago({ to: EVA.uid })));
+    await assertSucceeds(setDoc(doc(as(EVA), "pairs/p1/settlements/s1"), pago()));
+    await assertFails(updateDoc(doc(as(EVA), "pairs/p1/settlements/s1"), { status: "confirmed", decidedAt: "x" }));  // se lo confirma ella misma
+    await assertFails(updateDoc(doc(as(ANA), "pairs/p1/settlements/s1"), { status: "confirmed", amount: 300 }));
+    await assertSucceeds(updateDoc(doc(as(ANA), "pairs/p1/settlements/s1"), { status: "confirmed", decidedAt: "x" }));
+    await assertFails(updateDoc(doc(as(ANA), "pairs/p1/settlements/s1"), { status: "rejected", decidedAt: "y" }));   // ya decidido
+    await assertSucceeds(setDoc(doc(as(EVA), "pairs/p1/settlements/s2"), pago()));
+    await assertSucceeds(updateDoc(doc(as(EVA), "pairs/p1/settlements/s2"), { status: "cancelled", decidedAt: "x" }));
+    await assertFails(deleteDoc(doc(as(EVA), "pairs/p1/settlements/s2")));
+  });
+  it("ingresos del mes: cada uno escribe solo el suyo; los dos lo leen", async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(ANA), "pairs/p1/incomes/ana_2026-11"), { uid: ANA.uid, month: "2026-11", total: 2000, updatedAt: "x" }));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/incomes/eva_2026-11"), { uid: EVA.uid, month: "2026-11", total: 1 }));
+    await assertFails(setDoc(doc(as(ANA), "pairs/p1/incomes/ana_2026-12"), { uid: ANA.uid, month: "2026-11", total: 1 }));
+    await assertSucceeds(getDoc(doc(as(EVA), "pairs/p1/incomes/ana_2026-11")));
+    await assertFails(getDoc(doc(as(ADMIN), "pairs/p1/incomes/ana_2026-11")));
+  });
+});

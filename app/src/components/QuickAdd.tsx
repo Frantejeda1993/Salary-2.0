@@ -14,7 +14,10 @@ import {
 import { monthLong, sortedLive } from "../lib/format";
 import { compareFill, deltaText, fuelCategoriesByUse, fuelHistory, guessFuelCategory, isFuelCategory, parseFuel, suggestedPrice, type FuelInfo } from "../lib/fuel";
 import { useUI, type QuickAddPrefill } from "../ui";
+import { addShared } from "../lib/sharedData";
+import { splitError, type Split } from "../lib/shared";
 import Sheet from "./Sheet";
+import { SplitFields, usePartner } from "./Shared";
 
 type Kind = "expense" | "income" | "transfer";
 const KIND_LABEL: Record<Kind, string> = { expense: "Gasto", income: "Ingreso", transfer: "Transferencia" };
@@ -49,7 +52,8 @@ function FuelSummary({ cmp, price }: { cmp: ReturnType<typeof compareFill>; pric
 
 export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const { user, profile } = useAuth();
-  const { docs, mainAccountId } = useData();
+  const { docs, mainAccountId, shared } = useData();
+  const partner = usePartner();
   const { closeQuickAdd, toast } = useUI();
   const tz = profile?.settings?.timezone || "Europe/Madrid";
   const movements = docs.movements as RawCol;
@@ -90,6 +94,10 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const [isLoan, setIsLoan] = useState(ed?.transferKind === "loan");
   const [reserve, setReserve] = useState<"purchase" | "charge" | null>(edCard?.reserveIn ?? null);
   const [tried, setTried] = useState(false);
+  // 8c: gasto compartido con la pareja (solo al crear un gasto).
+  const [isShared, setIsShared] = useState(false);
+  const [paidBy, setPaidBy] = useState(user?.uid ?? "");
+  const [split, setSplit] = useState<Split>({ mode: "equal" });
 
   const value = parseAmount(amount);
   const cardId = payWith.startsWith("card:") ? payWith.slice(5) : null;
@@ -131,12 +139,16 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
   const fuel = isFuel ? parseFuel(kmRaw, shownPrice) : null;
   const cmp = isFuel && fuel && fuel !== "invalid" && value ? compareFill(value, fuel.km, fuel.pricePerLiter, fuelHist) : null;
 
+  const sharing = !ed && kind === "expense" && isShared && !!shared && !!partner;
+  const partnerPaid = sharing && paidBy !== user?.uid;
   const errors: string[] = [];
   const amountOk = !!(value && value > 0);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push("Elige una fecha.");
   if (kind !== "transfer" && !payWith) errors.push("Elige la cuenta.");
   if (kind === "transfer" && (!fromAcc || !toAcc || fromAcc === toAcc)) errors.push("Elige dos cuentas distintas.");
   if (fuel === "invalid") errors.push("Revisa los km y el precio por litro (o déjalos vacíos).");
+  const splitErr = sharing ? splitError(split, [user!.uid, partner!.uid]) : null;
+  if (splitErr) errors.push(splitErr);
 
   // Atajo genérico: recordar qué tarjeta de Wallet es cada tarjeta o cuenta de la app.
   const walletName = !ed && kind === "expense" ? prefill.walletName : undefined;
@@ -175,6 +187,15 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
       const undo = updateMovement(user.uid, prefill.edit.id, ed, after as unknown as Record<string, unknown>, loanDoc);
       closeQuickAdd();
       toast("Cambios guardados", undo);
+      return;
+    }
+    if (sharing && shared && m.type === "expense") {
+      const catName = categoryId ? (docs.categories[categoryId]?.name as string | undefined) ?? null : null;
+      const { undo } = addShared(user.uid, shared.pairId, {
+        date, description, amount: value, paidBy, split, categoryName: catName, myCategoryId: categoryId,
+      }, partnerPaid ? undefined : m);
+      closeQuickAdd();
+      toast(`Gasto compartido de ${formatEuros(value)} guardado`, undo);
       return;
     }
     const { undo } = addMovement(user.uid, m, prefill.source ?? "app");
@@ -225,6 +246,15 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
         )}
 
         {kind !== "transfer" && <>
+          {!ed && kind === "expense" && shared && partner && (
+            <label className="check shared-toggle"><input type="checkbox" checked={isShared} onChange={(e) => setIsShared(e.target.checked)} />
+              Compartido con {partner.name}</label>
+          )}
+          {sharing && shared && partner && (
+            <SplitFields ctx={shared} partner={partner} amountCents={value ? Math.round(value * 100) : null} date={date}
+                         paidBy={paidBy} setPaidBy={setPaidBy} split={split} setSplit={setSplit} />
+          )}
+          {!partnerPaid && <>
           <label className="field"><span>{kind === "expense" ? "Pagar con" : "Cuenta"}</span>
             <select className="input" value={payWith} onChange={(e) => { setPayWith(e.target.value); setPayTouched(true); }}>
               <optgroup label="Cuentas">
@@ -241,7 +271,8 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
             <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               Recordar: «{walletName}» de Wallet es {payName}</label>
           )}
-          {kind === "expense" && card && chargeMonth && (
+          </>}
+          {kind === "expense" && !partnerPaid && card && chargeMonth && (
             <div className="field"><span>Se cobra en {monthLong(chargeMonth)}. ¿En qué mes lo descuentas?</span>
               <div className="segmented" role="group">
                 <button type="button" aria-pressed={reserveIn === "purchase"} onClick={() => setReserve("purchase")}>Al comprar</button>
@@ -249,7 +280,7 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
               </div>
             </div>
           )}
-          <div className="field"><span>Categoría</span>
+          <div className="field"><span>{sharing ? "Tu categoría para tu parte" : "Categoría"}</span>
             <div className="chips">
               <button type="button" className="chip" aria-pressed={categoryId === null} onClick={() => { setCategoryId(null); setCatTouched(true); }}>Sin categoría</button>
               {categories.map(([id, c]) => (
@@ -291,6 +322,7 @@ export default function QuickAdd({ prefill }: { prefill: QuickAddPrefill }) {
         {tried && errors.length > 0 && <ul className="errors">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
 
         {ed && settledNote}
+        {!!ed?.sharedId && <p className="muted small">Es un gasto compartido. Para cambiar el importe o el reparto, ábrelo en Mes → Gastos compartidos: así cambia para los dos.</p>}
         <button className="btn primary wide save" type="submit">{ed ? "Guardar cambios" : `Guardar ${KIND_LABEL[kind].toLowerCase()}`}</button>
         {prefill.edit && ed && (
           <button type="button" className="btn wide ghost danger-btn" onClick={() => {

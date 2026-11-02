@@ -178,3 +178,81 @@ test("Compartir gastos: invitar y cancelar", async ({ page }) => {
   await fold.getByRole("button", { name: "Cancelar invitación" }).click();
   await expect(fold.getByRole("button", { name: "Invitar a compartir gastos" })).toBeVisible();
 });
+
+// ------------------------------------------------------------------ 8c: gastos compartidos
+const EVA = "eva-uid";
+const ME = "mock-uid";
+const day1 = `${new Date().toISOString().slice(0, 7)}-01`;
+const activePair = {
+  "pairs/p1": { members: [EVA, ME], status: "active", invitedBy: EVA, invitedEmail: "demo@example.com",
+    names: { [EVA]: "Eva", [ME]: "Demo" }, emails: { [EVA]: "eva@example.com", [ME]: "demo@example.com" },
+    createdAt: "2026-10-01T10:00:00Z", acceptedAt: "2026-10-02T10:00:00Z" },
+};
+const sharedFold = (page: Page) => page.locator(".fold", { hasText: "Gastos compartidos" });
+
+test("Gastos compartidos: apuntar uno pagado por mí y ver lo que me deben", async ({ page }) => {
+  await openApp(page, { extra: activePair });
+  await page.locator(".tabbar .add").click();
+  await sheet(page).locator(".big-amount input").fill("100");
+  await sheet(page).locator("input.input").first().fill("Súper e2e");
+  await sheet(page).getByText("Compartido con Eva").click();
+  await expect(sheet(page).locator(".shared-preview")).toContainText("Tu parte 50,00 €");
+  await sheet(page).getByRole("button", { name: "Porcentaje" }).click();
+  await sheet(page).getByLabel("Tu parte (%)").fill("60");
+  await expect(sheet(page).locator(".shared-preview")).toContainText("Eva 40,00 €");
+  await sheet(page).locator(".save").click();
+  await expectClosed(page);
+  await sharedFold(page).locator("summary").click();
+  await expect(sharedFold(page)).toContainText("Eva te debe 40,00 €");
+  await expect(sharedFold(page).locator(".rows")).toContainText("Súper e2e");
+  // El movimiento real (100 €) está en Movimientos.
+  await tab(page, "Movimientos");
+  await expect(page.locator(".rows").getByText("Súper e2e")).toBeVisible();
+});
+
+test("Gastos compartidos: lo pagó Eva, saldo y espero su confirmación", async ({ page }) => {
+  await openApp(page, { extra: { ...activePair,
+    "pairs/p1/shared/g1": { date: day1, description: "Cena", amount: 80, paidBy: EVA, createdBy: EVA, split: { mode: "equal" }, categoryName: null, createdAt: "x" },
+  } });
+  await sharedFold(page).locator("summary").click();
+  await expect(sharedFold(page)).toContainText("Debes 40,00 € a Eva");
+  await expect(page.locator(".closing")).toContainText("que debes a Eva");
+  await sharedFold(page).getByRole("button", { name: /Saldar con Eva/ }).click();
+  await sheet(page).locator(".save").click();
+  await expectClosed(page);
+  await expect(sharedFold(page)).toContainText("falta que lo confirme");
+  await sharedFold(page).getByRole("button", { name: "Cancelar" }).click();
+  await expect(sharedFold(page).getByRole("button", { name: /Saldar con Eva/ })).toBeVisible();
+});
+
+test("Gastos compartidos: confirmar un pago recibido y apuntar con qué pagué", async ({ page }) => {
+  await openApp(page, { extra: { ...activePair,
+    "pairs/p1/shared/g1": { date: day1, description: "Ikea", amount: 60, paidBy: ME, createdBy: EVA, split: { mode: "equal" }, categoryName: null, createdAt: "x" },
+    "pairs/p1/settlements/s1": { date: day1, amount: 10, from: EVA, to: ME, status: "pending", createdAt: "x" },
+  } });
+  // El pago por confirmar abre la sección sola.
+  await expect(sharedFold(page)).toContainText("Eva dice que te pagó 10,00 €");
+  await sharedFold(page).getByRole("button", { name: "Lo recibí" }).click();
+  await expect(sharedFold(page)).toContainText("Eva te pagó");
+  await expect(sharedFold(page)).toContainText("Eva te debe 20,00 €");
+  // «Por hacer»: Eva apuntó que lo pagué yo.
+  await page.locator(".fold > summary", { hasText: "Por hacer" }).click();
+  await page.getByRole("button", { name: "Elegir" }).click();
+  await sheet(page).getByRole("button", { name: "Registrar el pago" }).click();
+  await expectClosed(page);
+  await expect(page.getByRole("button", { name: "Elegir" })).toHaveCount(0);
+  await tab(page, "Movimientos");
+  await expect(page.locator(".rows").getByText("Ikea")).toBeVisible();
+  await expect(page.locator(".rows").getByText("Pago de Eva (gastos compartidos)")).toBeVisible();
+});
+
+test("Gastos compartidos: no se deja de compartir con saldo pendiente", async ({ page }) => {
+  await openApp(page, { extra: { ...activePair,
+    "pairs/p1/shared/g1": { date: day1, description: "Cena", amount: 80, paidBy: EVA, createdBy: EVA, split: { mode: "equal" }, categoryName: null, createdAt: "x" },
+  } });
+  await tab(page, "Ajustes");
+  await page.locator(".fold > summary", { hasText: "Compartir gastos" }).click();
+  const fold = page.locator(".fold", { hasText: "Compartir gastos" });
+  await expect(fold).toContainText("primero tenéis que quedar en paz (debes 40,00 €)");
+  await expect(fold.getByRole("button", { name: "Dejar de compartir" })).toHaveCount(0);
+});

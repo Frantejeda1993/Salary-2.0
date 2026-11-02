@@ -547,3 +547,13 @@ details.done-list[open] summary::after { transform: rotate(225deg); margin-botto
   padding: 10px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--action) 40%, var(--rule));
   background: color-mix(in srgb, var(--action) 8%, var(--sheet)); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .pair-banner-cta { color: var(--action); font-weight: 600; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- 8c: gastos compartidos */
+.shared-toggle { font-weight: 600; }
+.shared-fields { display: grid; gap: 4px; padding: 6px 12px 10px; margin: 4px 0 8px; border: 1px solid var(--rule); border-left: 3px solid var(--action); border-radius: 14px; }
+.shared-preview { margin: 6px 0 2px; font-size: 15px; }
+.shared-preview small { display: block; color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.shared-fold .pair-card { margin: 12px 14px; padding: 12px; border-radius: 12px; background: var(--sheet-2); }
+.shared-fold > .fold-body > .btn.wide { margin: 8px 14px 14px; width: calc(100% - 28px); }
+.shared-fold > .fold-body > p { margin: 8px 14px; }
+.warn-text { color: var(--out) !important; }

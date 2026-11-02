@@ -19,6 +19,8 @@ const report = (e: unknown) => onError(
     : `No se pudo guardar: ${(e as Error)?.message ?? e}`,
 );
 const run = (p: Promise<unknown>) => { p.catch(report); };
+/** Lanza una escritura sin esperarla; los errores van al aviso de la app. */
+export const fireWrite = run;
 
 /** Céntimos del motor -> euros de Firestore. */
 export const toEuros = (cents: number) => Math.round(cents) / 100;
@@ -34,7 +36,7 @@ export interface NewExpense {
 export interface NewIncome { type: "income"; date: string; amount: number; description: string; categoryId: string | null; accountId: string }
 export interface NewTransfer {
   type: "transfer"; date: string; amount: number; description: string; accountId: string; toAccountId: string;
-  transferKind: "normal" | "loan" | "loanRepayment" | "ownExpenseRefund";
+  transferKind: "normal" | "loan" | "loanRepayment" | "ownExpenseRefund" | "sharedSettlement";
   loan?: { status: "pending" | "paid"; outstanding: number }; loanId?: string;
 }
 export type NewMovement = NewExpense | NewIncome | NewTransfer;

@@ -1,7 +1,8 @@
 # Fase 8c — Gastos compartidos: diseño para aprobar
 
-Estado: **propuesta** (1-nov-2026). Nada de esto está programado. Nombres e importes inventados.
-Decisiones ya tomadas: E3–E6 en `DECISIONES.md`.
+Estado: **programado** (2-nov-2026), pendiente de aprobación. Nombres e importes inventados.
+Decisiones: E3–E6 y su implementación E7–E12 en `DECISIONES.md`. Diferencia con este diseño:
+el pago al saldar sale siempre de la cuenta principal (E8).
 
 ## 1. Idea en una frase
 

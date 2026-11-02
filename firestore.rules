@@ -117,6 +117,70 @@ service cloud.firestore {
       );
 
       allow delete: if false;
+
+      // ---------------------------------------------------------------- Fase 8c
+      // Gastos compartidos. Solo los ven los dos miembros; solo se escribe con la pareja activa
+      // (salvo confirmar o rechazar un pago ya enviado). Cada uno guarda en users/{uid} lo suyo
+      // (su categoría y su movimiento): aquí no hay datos de las cuentas de nadie.
+      function pairData() { return get(/databases/$(database)/documents/pairs/$(pairId)).data; }
+      function pairMember() { return invited() && request.auth.uid in pairData().members; }
+      function activeMember() { return pairMember() && pairData().status == 'active'; }
+
+      // Gasto compartido. Solo quien lo creó lo edita o lo borra (E6).
+      match /shared/{sharedId} {
+        function validShared(d) {
+          return d.keys().hasOnly(['date', 'description', 'amount', 'paidBy', 'createdBy', 'split', 'categoryName', 'createdAt', 'updatedAt', 'updatedBy'])
+            && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.description is string && d.description.size() <= 200
+            && d.amount is number && d.amount > 0 && d.amount < 1000000
+            && d.paidBy in pairData().members
+            && d.split.mode in ['equal', 'percent', 'income']
+            && d.split.keys().hasOnly(['mode', 'percent']);
+        }
+        allow read: if pairMember();
+        allow create: if activeMember()
+          && request.resource.data.createdBy == request.auth.uid
+          && validShared(request.resource.data);
+        allow update: if activeMember()
+          && resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdBy == resource.data.createdBy
+          && validShared(request.resource.data);
+        allow delete: if activeMember() && resource.data.createdBy == request.auth.uid;
+      }
+
+      // Pagos para saldar: los envía quien paga y los confirma (o rechaza) quien recibe (E6).
+      match /settlements/{settlementId} {
+        function st() { return request.resource.data; }
+        function stChanged() { return st().diff(resource.data).affectedKeys(); }
+        allow read: if pairMember();
+        allow create: if activeMember()
+          && st().keys().hasOnly(['date', 'amount', 'from', 'to', 'status', 'createdAt'])
+          && st().from == request.auth.uid
+          && st().to in pairData().members && st().to != request.auth.uid
+          && st().status == 'pending'
+          && st().amount is number && st().amount > 0
+          && st().date is string && st().date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+        allow update: if pairMember() && resource.data.status == 'pending' && (
+          (resource.data.to == request.auth.uid && st().status in ['confirmed', 'rejected']
+            && stChanged().hasOnly(['status', 'decidedAt']))
+          || (resource.data.from == request.auth.uid && st().status == 'cancelled'
+            && stChanged().hasOnly(['status', 'decidedAt']))
+        );
+        allow delete: if false;
+      }
+
+      // Total cobrado por cada uno en un mes (reparto por ingresos). Cada uno escribe solo el suyo.
+      match /incomes/{incomeId} {
+        function inc() { return request.resource.data; }
+        allow read: if pairMember();
+        allow create, update: if activeMember()
+          && inc().keys().hasOnly(['uid', 'month', 'total', 'updatedAt'])
+          && inc().uid == request.auth.uid
+          && inc().month is string && inc().month.matches('^[0-9]{4}-[0-9]{2}$')
+          && incomeId == request.auth.uid + '_' + inc().month
+          && inc().total is number;
+        allow delete: if false;
+      }
     }
 
     // Todo lo demás, cerrado.

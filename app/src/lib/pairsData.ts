@@ -31,7 +31,7 @@ export const cancelPair = (p: Pair) => updateDoc(doc(db, "pairs", p.id), { statu
 export const endPair = (p: Pair, uid: string) => updateDoc(doc(db, "pairs", p.id), { status: "ended", endedAt: now(), endedBy: uid });
 
 /** Mis parejas (en las que soy miembro) e invitaciones a mi email, en tiempo real. */
-export function usePairs(uid: string | undefined, email: string | undefined): PairState & { ready: boolean } {
+export function usePairs(uid: string | undefined, email: string | undefined): PairState & { ready: boolean; mine: Pair[] } {
   const [mine, setMine] = useState<Pair[] | null>(null);
   const [toMe, setToMe] = useState<Pair[] | null>(null);
   useEffect(() => {
@@ -44,5 +44,5 @@ export function usePairs(uid: string | undefined, email: string | undefined): Pa
       : (setToMe([]), () => undefined);
     return () => { u1(); u2(); };
   }, [uid, email]);
-  return { ...pairState(mine ?? [], toMe ?? [], uid ?? ""), ready: mine !== null && toMe !== null };
+  return { ...pairState(mine ?? [], toMe ?? [], uid ?? ""), ready: mine !== null && toMe !== null, mine: mine ?? [] };
 }

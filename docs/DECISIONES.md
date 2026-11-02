@@ -74,4 +74,16 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | E4 | Gasto compartido: para quien paga cuenta solo su parte (el resto, «te deben»); para el otro, su parte es gasto suyo ese mes en la categoría que elija y resta de su previsión aunque no haya pagado. |
 | E5 | Reparto por ingresos: todo lo cobrado de verdad en el mes (nómina e ingresos esporádicos); provisional hasta el cierre y se recalcula si alguien corrige un ingreso de ese mes después. |
 | E6 | Saldar requiere confirmación del que recibe. Editar o borrar un gasto compartido: solo quien lo creó; el otro ve aviso. No se deja de compartir con saldo pendiente. Se puede apuntar «lo pagué yo» o «lo pagó él». |
+| E5 bis (2-nov-2026) | Confirmado: el reparto por ingresos **se recalcula siempre**, también en meses ya saldados; la app avisa al cambiar un mes cerrado. |
+
+### Cómo lo implementa la 8c (2-nov-2026)
+
+| Id | Regla | Estado |
+| --- | --- | --- |
+| E7 | **Cifras de cada uno.** Las categorías y los budgets cuentan solo tu parte de cada gasto compartido. La previsión es *caja menos lo que debes* a tu pareja; lo que *te debe* no suma hasta que lo cobras (como un préstamo, en «Si se saldan…»). Las deudas en los dos sentidos se compensan. Los pagos entre la pareja mueven el saldo real, no la previsión. Sin gastos compartidos no cambia ninguna cifra. | Programado; reproduce los ejemplos del diseño (`engine/test/shared.test.ts`) |
+| E8 | **Saldar desde y hacia la cuenta principal.** El pago se apunta solo, en la principal de cada uno, al confirmarlo quien recibe. El diseño decía «quien paga elige la cuenta»: se simplificó porque la deuda vive en la principal y, si el pago saliera de otra cuenta, las cifras por cuenta dejarían de cuadrar. | **Pendiente de tu aprobación** |
+| E9 | **Ingresos para el reparto** (E5): nóminas netas más ingresos del mes, **sin** las devoluciones (ingresos con la categoría de un budget, regla D) ni los pagos entre la pareja. | **Pendiente de tu aprobación** |
+| E10 | Cada uno elige su categoría para su parte; si no elige, la app propone la suya de igual nombre que la de quien lo apuntó. Las categorías y las cuentas de cada uno no se comparten. | Programado |
+| E11 | Lo pagaste tú y no has dicho con qué (lo apuntó tu pareja, o borraste tu movimiento): la previsión ya lo descuenta entero y te aparece en «Por hacer» para elegir cuenta o tarjeta; el saldo real cambia al elegirla. | Programado |
+| E12 | Si pagas un gasto compartido desde una cuenta que no es la principal, la parte de tu pareja se descuenta en esa cuenta y lo que te debe se refleja en la principal. | Limitación conocida |
 

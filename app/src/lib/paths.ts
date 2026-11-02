@@ -4,6 +4,8 @@ import { db } from "../firebase";
 /** Colecciones del usuario (modelo nuevo, ver especificación sección 5). */
 export const USER_COLLECTIONS = [
   "accounts", "cards", "categories", "salaries", "fixedExpenses", "budgets", "movements", "cardSettlements",
+  // 8c: lo privado de cada gasto compartido (mi categoría y mi movimiento).
+  "sharedLinks",
 ] as const;
 export type UserCollection = (typeof USER_COLLECTIONS)[number];
 

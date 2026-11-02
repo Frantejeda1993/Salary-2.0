@@ -9,7 +9,10 @@ import { useAuth } from "../auth";
 import { normalizeEmail, validEmail } from "../lib/access";
 import { grantAccess, requestAccess, type Me } from "../lib/accessData";
 import { cannotInvite, pairInviteMessage, partnerOf, type Pair, type PairState } from "../lib/pairs";
-import { acceptPair, cancelPair, declinePair, endPair, invitePartner, usePairs } from "../lib/pairsData";
+import { acceptPair, cancelPair, declinePair, endPair, invitePartner } from "../lib/pairsData";
+import { useData } from "../data";
+import { currentBalance } from "../lib/shared";
+import { formatCents } from "../lib/money";
 import { useUI } from "../ui";
 import { useIsAdmin } from "./AccessSettings";
 import Fold from "./Fold";
@@ -18,10 +21,10 @@ import { appBase } from "./ShortcutGuide";
 type Ctx = PairState & { ready: boolean };
 const PairsContext = createContext<Ctx>({ active: null, outgoing: null, incoming: [], ready: false });
 
+/** Las parejas se leen en DataProvider (cambian las cifras del motor); aquí solo se reparten. */
 export function PairsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const state = usePairs(user?.uid, user?.email ?? undefined);
-  return <PairsContext.Provider value={state}>{children}</PairsContext.Provider>;
+  const { pairs } = useData();
+  return <PairsContext.Provider value={pairs}>{children}</PairsContext.Provider>;
 }
 export const usePairState = () => useContext(PairsContext);
 
@@ -73,7 +76,11 @@ export default function PairSettings() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const { shared } = useData();
   if (!me) return null;
+  // E6: no se deja de compartir con algo pendiente entre los dos.
+  const owed = shared ? currentBalance(shared) : 0;
+  const pendingPays = shared ? shared.settlements.filter((s) => s.status === "pending").length : 0;
   const why = validEmail(email) ? cannotInvite(state, email, me.email) : null;
 
   async function invite() {
@@ -103,8 +110,10 @@ export default function PairSettings() {
         <section className="pair-active">
           <p>Compartes gastos con <strong>{partnerOf(active, me.uid).name}</strong>
             {partnerOf(active, me.uid).email ? ` (${partnerOf(active, me.uid).email})` : ""} desde el {dayText(active.acceptedAt)}.</p>
-          <p className="muted small">Pronto podrás marcar un gasto como compartido al apuntarlo y repartirlo por porcentaje o por ingresos.</p>
-          {!confirmEnd
+          <p className="muted small">Al apuntar un gasto con «+», marca «Compartido» y elige quién pagó y cómo se reparte (a medias, por porcentaje o por ingresos). Lo que os debéis está en Mes → Gastos compartidos.</p>
+          {owed !== 0 || pendingPays > 0
+            ? <p className="muted small">Para dejar de compartir, primero tenéis que quedar en paz{owed > 0 ? ` (debes ${formatCents(owed)})` : owed < 0 ? ` (te deben ${formatCents(-owed)})` : ""}{pendingPays ? " y resolver los pagos por confirmar" : ""}.</p>
+            : !confirmEnd
             ? <button className="link danger" onClick={() => setConfirmEnd(true)}>Dejar de compartir</button>
             : <div className="pair-actions">
                 <p className="warn">Dejaréis de ver los gastos compartidos del otro. Tus cuentas no cambian.</p>

@@ -9,6 +9,7 @@ import AmountSheet from "../components/AmountSheet";
 import Fold from "../components/Fold";
 import SpendingSheet from "../components/SpendingSheet";
 import { PairInviteBanner } from "../components/Pairs";
+import { SharedSection, usePartner, useSharedTodos } from "../components/Shared";
 import ScreenHeader from "../components/ScreenHeader";
 import { IconNext, IconPrev } from "../components/Icons";
 import { useAuth } from "../auth";
@@ -39,6 +40,9 @@ export default function MonthPage() {
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Todo | null>(null);
   const [spending, setSpending] = useState(false);
+  const partner = usePartner();
+  const asked0 = params.get("mes");
+  const sharedTodos = useSharedTodos(asked0 && /^\d{4}-\d{2}$/.test(asked0) ? asked0 : currentMonth);
 
   if (!ready || !core) return <div className="splash">Cargando tus datos…</div>;
   if (!mainAccountId || !docs.accounts[mainAccountId]) {
@@ -162,14 +166,19 @@ export default function MonthPage() {
     : phase === "current"
       ? { label: "Real hoy", value: real }
       : { label: `Cierre previsto de ${monthName(month)}`, value: proj };
-  const hasLoans = impact.debes !== 0 || impact.te_deben !== 0;
+  // 8c: lo que te debe tu pareja no está en la previsión; lo que le debes, sí.
+  const sharedPos = partner ? core.sharedPosition(month) : { neto: 0, debes: 0, te_deben: 0 };
+  const settleAll = impact.neto + sharedPos.te_deben;
+  const hasLoans = impact.debes !== 0 || impact.te_deben !== 0 || sharedPos.te_deben !== 0;
+  const settleLabel = sharedPos.te_deben ? (impact.debes || impact.te_deben ? "Si se saldan préstamos y gastos compartidos" : `Si ${partner!.name} te paga`) : "Si se saldan los préstamos";
   // Tarjeta que se cobra este mes en la cuenta principal (compras del mes anterior), aún sin saldar.
   const cardDue = core.creditGroups().filter((g) => g.mes_cargo === month && g.settlement === null && g.account_id === main);
   const cardDueCents = pySum(cardDue.map((g) => g.total));
   // Lo reservado «al comprar» ya restó en el mes de la compra: aquí no vuelve a restar.
   const cardDueReserved = pySum(cardDue.flatMap((g) => g.items).filter((e) => reserveMonth(e) < month).map((e) => e.amount ?? 0));
   const cardDueNames = [...new Set(cardDue.map((g) => nameOf(docs.cards, g.card_id ?? `card_${g.account_id}`, "Tarjeta")))].join(", ");
-  const loanDetail = [impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : ""]
+  const loanDetail = [impact.debes ? `devuelves ${formatCents(impact.debes)}` : "", impact.te_deben ? `te devuelven ${formatCents(impact.te_deben)}` : "",
+    sharedPos.te_deben ? `${partner?.name ?? "tu pareja"} te paga ${formatCents(sharedPos.te_deben)}` : ""]
     .filter(Boolean).join(", ");
 
   return (
@@ -210,6 +219,9 @@ export default function MonthPage() {
         {phase !== "past" && (s.deuda_tarjeta_arrastrada ?? 0) > 0 && (
           <p className="muted small">Incluye {formatCents(s.deuda_tarjeta_arrastrada!)} de tarjeta de meses anteriores, aún sin saldar.</p>
         )}
+        {phase !== "past" && sharedPos.debes > 0 && (
+          <p className="muted small">Ya descuenta {formatCents(sharedPos.debes)} que debes a {partner?.name} por gastos compartidos.</p>
+        )}
         {phase !== "past" && (s.reembolsos_propios_pendientes ?? 0) > 0 && (
           <p className="muted small">Ya descuenta {formatCents(s.reembolsos_propios_pendientes!)} de reembolsos de gastos propios.</p>
         )}
@@ -217,7 +229,7 @@ export default function MonthPage() {
 
       <div className="figures">
         {phase === "future" ? <>
-          {hasLoans && <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>}
+          {hasLoans && <div className="loan-fig"><span>{settleLabel}</span><strong className={proj + settleAll < 0 ? "neg" : ""}>{formatCents(proj + settleAll)}</strong><small>{loanDetail}</small></div>}
           <div className="loan-fig"><span>Empiezas con</span><strong className={s.remaining_from_previous_month < 0 ? "neg" : ""}>{formatCents(s.remaining_from_previous_month)}</strong>
             <small>Lo que sobra de {monthName(addMonths(month, -1))}{cardDueReserved ? ", ya sin la tarjeta" : ""}</small></div>
           <div className="loan-fig"><span>Tarjeta a pagar</span><strong>{formatCents(cardDueCents)}</strong><small>{!cardDueCents ? `Sin compras de ${monthName(addMonths(month, -1))}`
@@ -229,7 +241,7 @@ export default function MonthPage() {
           <div><span>Budgets</span><strong>{formatCents(s.presupuestos)}</strong></div>
         </> : <>
           {phase === "current" && hasLoans
-            ? <div className="loan-fig"><span>Si se saldan los préstamos</span><strong className={proj + impact.neto < 0 ? "neg" : ""}>{formatCents(proj + impact.neto)}</strong><small>{loanDetail}</small></div>
+            ? <div className="loan-fig"><span>{settleLabel}</span><strong className={proj + settleAll < 0 ? "neg" : ""}>{formatCents(proj + settleAll)}</strong><small>{loanDetail}</small></div>
             : phase === "current"
               ? <div><span>Cierre previsto</span><strong>{formatCents(proj)}</strong></div>
               : <div><span>Resultado del mes</span><strong>{formatCents(real - s.remaining_from_previous_month)}</strong></div>}
@@ -242,9 +254,16 @@ export default function MonthPage() {
 
       <Fold className="fold-main" title={canAct ? "Por hacer" : "Previsto"} total={formatCents(pendingCents)}
             sub={doneCents ? `pendiente, ${formatCents(doneCents)} pagado` : "pendiente"}>
-      {todos.length === 0
+      {todos.length === 0 && !(canAct && sharedTodos.todos.length)
         ? <div className="rows"><p className="empty">{canAct ? "Nada pendiente este mes." : "Nada previsto."}</p></div>
         : <ul className="rows">
+            {canAct && sharedTodos.todos.map((t) => (
+              <li key={t.key}>
+                <span className="what"><b>{t.title}</b><small>{t.detail}</small></span>
+                <span className="act"><span className="amt">{formatCents(t.cents)}</span>
+                  <button className="btn small" onClick={t.open}>{t.button}</button></span>
+              </li>
+            ))}
             {todos.map((t) => (
               <li key={t.key}>
                 <button className="what plain" onClick={() => canAct && t.sheet && setEditing(t)} disabled={!canAct || !t.sheet}>
@@ -274,6 +293,9 @@ export default function MonthPage() {
         </>
       )}
       </Fold>
+
+      <SharedSection month={month} canAct={phase === "current"} today={today} />
+      {sharedTodos.sheet}
 
       {phase === "current" && loans.length > 0 && <Fold className="fold-main" title="Préstamos pendientes"
             total={<span className={impact.neto < 0 ? "neg" : impact.neto > 0 ? "pos" : ""}>{formatCents(impact.neto)}</span>}

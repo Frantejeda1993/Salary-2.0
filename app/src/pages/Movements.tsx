@@ -11,7 +11,7 @@ import { isFiltering, matches, NO_CATEGORY, type MovFilter } from "../lib/movfil
 import { useUI } from "../ui";
 
 type Raw = Record<string, unknown>;
-const KIND: Record<string, string> = { normal: "Transferencia", loan: "Préstamo", loanRepayment: "Devolución de préstamo", ownExpenseRefund: "Reembolso de gastos propios" };
+const KIND: Record<string, string> = { normal: "Transferencia", loan: "Préstamo", loanRepayment: "Devolución de préstamo", ownExpenseRefund: "Reembolso de gastos propios", sharedSettlement: "Pago de gastos compartidos" };
 
 /** «40,0 L, 6,7 L/100 km» de un repostaje, si tiene datos. */
 function fillFromMovement(m: Raw): string | null {
@@ -24,7 +24,7 @@ function fillFromMovement(m: Raw): string | null {
 
 export default function Movements() {
   const { ready, docs, currentMonth } = useData();
-  const { openQuickAdd } = useUI();
+  const { openQuickAdd, toast } = useUI();
   const [month, setMonth] = useState<Month>(currentMonth);
   const [q, setQ] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -68,9 +68,11 @@ export default function Movements() {
       return f ? `${base}. ${f}` : base;
     }
     if (m.type === "income") return `Ingreso en ${acc(m.accountId)}`;
+    if (m.transferKind === "sharedSettlement") return m.accountId ? `Sale de ${acc(m.accountId)}` : `Entra en ${acc(m.toAccountId)}`;
     return `${KIND[m.transferKind as string] ?? "Transferencia"}: ${acc(m.accountId)} a ${acc(m.toAccountId)}`;
   };
-  const sign = (m: Raw) => (m.type === "expense" ? -1 : m.type === "income" ? 1 : 0);
+  const sign = (m: Raw) => (m.type === "expense" ? -1 : m.type === "income" ? 1
+    : m.transferKind === "sharedSettlement" ? (m.accountId ? -1 : 1) : 0);
 
   return (
     <div className="page">
@@ -126,7 +128,9 @@ export default function Movements() {
           <ul className="rows">
             {list.map(([id, m]) => (
               <li key={id}>
-                <button className="what plain" onClick={() => openQuickAdd({ edit: { id, data: m } })}>
+                <button className="what plain" onClick={() => (m.transferKind === "sharedSettlement"
+                  ? toast("Los pagos entre vosotros se gestionan en Mes → Gastos compartidos")
+                  : openQuickAdd({ edit: { id, data: m } }))}>
                   <b>{(m.description as string) || (m.type === "transfer" ? KIND[m.transferKind as string] ?? "Transferencia" : "Sin concepto")}</b>
                   <small>{describe(m)}</small>
                 </button>
