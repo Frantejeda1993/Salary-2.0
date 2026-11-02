@@ -18,7 +18,7 @@ Actualizado: 2-nov-2026.
 | 8a | Acceso por invitación: `allowlist` y `accessRequests` en Firestore, aprobación del administrador en Ajustes, invitar con el menú de compartir; recorridos e2e y tests de reglas en CI | Aprobada (1-nov) |
 | 8b | Vincular dos cuentas (`pairs/{id}`, parejas de 2): invitar (pide también el acceso), aceptar/rechazar, cancelar, dejar de compartir; aviso en Mes | Aprobada (2-nov) |
 | 8c | Gastos compartidos: marcar al apuntar, reparto a medias / porcentaje / por ingresos, sección en Mes con arrastre, saldar con confirmación, «¿con qué pagaste?», motor (E7–E12) | **Programada, pendiente de aprobación** (2-nov). Requiere publicar `firestore.rules` |
-| 8d | App Android (envoltorio de la PWA + lectura de notificaciones elegidas), APK fuera de Play | Pendiente, después de 8c |
+| 8d | App Android (envoltorio de la PWA + lectura de notificaciones elegidas), APK fuera de Play | Diseño para aprobar: `docs/DISENO-8D.md` (decisiones D1–D5) |
 
 ## Verificación a 2-nov-2026
 
