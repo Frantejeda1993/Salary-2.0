@@ -17,8 +17,8 @@ Actualizado: 2-nov-2026.
 | 7 | Migración final al uid real y retirada de la app vieja | Hecha: Salary 2.0 es la app oficial desde octubre de 2026 |
 | 8a | Acceso por invitación: `allowlist` y `accessRequests` en Firestore, aprobación del administrador en Ajustes, invitar con el menú de compartir; recorridos e2e y tests de reglas en CI | Aprobada (1-nov) |
 | 8b | Vincular dos cuentas (`pairs/{id}`, parejas de 2): invitar (pide también el acceso), aceptar/rechazar, cancelar, dejar de compartir; aviso en Mes | Aprobada (2-nov) |
-| 8c | Gastos compartidos: marcar al apuntar, reparto a medias / porcentaje / por ingresos, sección en Mes con arrastre, saldar con confirmación, «¿con qué pagaste?», motor (E7–E12) | **Programada, pendiente de aprobación** (2-nov). Requiere publicar `firestore.rules` |
-| 8d | App Android (envoltorio de la PWA + lectura de notificaciones elegidas), APK fuera de Play | Diseño para aprobar: `docs/DISENO-8D.md` (decisiones D1–D5) |
+| 8c | Gastos compartidos: marcar al apuntar, reparto a medias / porcentaje / por ingresos, sección en Mes con arrastre, saldar con confirmación, «¿con qué pagaste?», motor (E7–E12) | Publicada (2-nov), reglas publicadas; en prueba con amigos. E8 y E9 pendientes de aprobación |
+| 8d | App Android: TWA de la PWA + lector de notificaciones de Google Wallet que abre el alta rellena; APK en Releases | **Primera versión para probar con amigos** (2-nov). Ver `docs/ANDROID.md` |
 
 ## Verificación a 2-nov-2026
 
@@ -28,9 +28,9 @@ Actualizado: 2-nov-2026.
 
 ## Pendientes y riesgos conocidos
 
-1. **Aprobar la 8c** y las decisiones E8 (saldar siempre por la cuenta principal) y E9 (qué ingresos cuentan para el reparto).
-2. **Publicar `firestore.rules`** en Firebase Console: sin eso, apuntar un gasto compartido da «permiso denegado».
-3. **8d (Android)**: diseño y decisiones abiertas antes de programar.
+1. **Aprobar** las decisiones E8 (saldar siempre por la cuenta principal) y E9 (qué ingresos cuentan para el reparto).
+2. **8d**: crear los 4 secrets de firma y lanzar el primer build (`docs/ANDROID.md`); formatos reales de notificaciones de Wallet de los amigos para ajustar el lector.
+3. **8d opcional**: repo `Frantejeda1993.github.io` con `assetlinks.json` para quitar la barra del navegador.
 4. **Retirar `LEGACY_OPTIONS`** y el código de compatibilidad cuando ya no haga falta comparar con la app vieja.
 5. **Multiusuario**: faltan borrado de cuenta y datos por el propio usuario, y vigilar el coste de Firebase.
 6. **Especificación de Fase 1 no versionada**: el código la cita; si se recupera, añadirla a `docs/`.

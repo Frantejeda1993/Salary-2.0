@@ -58,6 +58,7 @@ Idioma: **español** en código (comentarios, nombres de UI), commits, docs y re
 | `firestore.rules` | Cerradas: solo emails invitados, solo `users/{uid}/…`; `meta/` solo la escribe el script. |
 | `docs/DECISIONES.md` | Registro de decisiones de negocio (léelo antes de tocar cálculos). |
 | `docs/ESTADO.md` | Fases, estado actual y pendientes. |
+| `android/` | App Android (8d): TWA de la PWA + lector de notificaciones de pago. Ver `docs/ANDROID.md`. Solo compila en GitHub Actions (aquí no se descarga el SDK); el lector es Java puro y sus tests se pueden ejecutar con `javac`. |
 
 ## Modelo de datos (Firestore)
 

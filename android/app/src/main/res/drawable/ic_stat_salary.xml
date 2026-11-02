@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de los avisos: una moneda (silueta blanca, como exige Android). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2A10,10 0,1 0,22 12,10 10,0 0,0 12,2ZM12,20A8,8 0,1 1,20 12,8 8,0 0,1 12,20ZM13,7h-2v2.1A3,3 0,0 0,11 15h2a1,1 0,0 1,0 2H9v2h2v1h2v-1.1A3,3 0,0 0,13 13h-2a1,1 0,0 1,0 -2h4V9h-2Z" />
+</vector>

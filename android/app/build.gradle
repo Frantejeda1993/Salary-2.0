@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Versión: la pone la CI (número de ejecución). Firma: secrets del repo, nunca ficheros en el repo.
+def versionCodeEnv = Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+
+android {
+    namespace 'es.frantejeda.salary'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'es.frantejeda.salary'
+        minSdk 24
+        targetSdk 35
+        versionCode versionCodeEnv
+        versionName "0.1.${versionCodeEnv}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KEYSTORE_FILE') ?: 'no-keystore.jks')
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias System.getenv('KEY_ALIAS')
+            keyPassword System.getenv('KEY_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    testImplementation 'junit:junit:4.13.2'
+}

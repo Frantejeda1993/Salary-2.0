@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "es.frantejeda.salary",
+      "sha256_cert_fingerprints": ["69:C5:7A:BE:41:9C:24:B7:13:2F:66:91:7C:C4:BC:B8:D9:C4:CA:62:20:EF:B8:13:5C:7C:60:CE:D6:70:BB:EB"]
+    }
+  }
+]

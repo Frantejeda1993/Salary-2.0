@@ -1,6 +1,6 @@
 # Fase 8d — Android: diseño para aprobar
 
-Estado: **propuesta** (2-nov-2026). Nada programado. Objetivo: que tus amigos con Android
+Estado: **primera versión programada** (2-nov-2026) con las propuestas de D1–D5 (confirmar cada gasto, solo Google Wallet por defecto, firma en GitHub Actions, APK en Releases; D3 queda opcional). Uso: `docs/ANDROID.md`. Objetivo: que tus amigos con Android
 apunten un gasto en menos de 5 segundos, como el atajo de Apple Pay en iPhone.
 
 ## 1. Idea en una frase

@@ -7,6 +7,8 @@ import { AccountSelect, Errors, Field, TextInput, Warn } from "../components/For
 import { CardEditor } from "../components/PlanEditors";
 import Fold from "../components/Fold";
 import ShortcutGuide, { WalletNames } from "../components/ShortcutGuide";
+import AndroidGuide from "../components/AndroidGuide";
+import { currentPlatform } from "../lib/platform";
 import AccessSettings from "../components/AccessSettings";
 import PairSettings from "../components/Pairs";
 import ScreenHeader from "../components/ScreenHeader";
@@ -38,6 +40,7 @@ export default function Settings() {
   const settings = profile.settings as unknown as Raw;
   const tz = (settings.timezone as string) ?? "Europe/Madrid";
   const close = () => setEditing(null);
+  const platform = currentPlatform();
   const cardsOf = (accId: string) => Object.values(docs.cards).filter((c) => c.accountId === accId && !c.archived);
 
   const allAccounts = Object.entries(docs.accounts).sort(([, a], [, b]) => ((a.order as number) ?? 999) - ((b.order as number) ?? 999));
@@ -103,8 +106,13 @@ export default function Settings() {
         <button className="btn wide ghost fold-add" onClick={() => setEditing({ kind: "category", id: null })}>Añadir categoría</button>
       </Fold>
 
-      <Fold title="Apuntar al pagar con Apple Pay" sub="iPhone, con Atajos">
-        <ShortcutGuide />
+      {platform === "other" && (
+        <Fold title="Apuntar al pagar con Apple Pay" sub="iPhone, con Atajos">
+          <ShortcutGuide />
+        </Fold>
+      )}
+      <Fold title="Android" sub={platform === "android-app" ? "Avisos de pago" : "App para apuntar al pagar"}>
+        <AndroidGuide platform={platform} />
       </Fold>
 
       <button className="link tour-link" onClick={() => window.dispatchEvent(new Event("salary:tour"))}>Ver el tour de la app</button>

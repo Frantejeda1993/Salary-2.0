@@ -557,3 +557,8 @@ details.done-list[open] summary::after { transform: rotate(225deg); margin-botto
 .shared-fold > .fold-body > .btn.wide { margin: 8px 14px 14px; width: calc(100% - 28px); }
 .shared-fold > .fold-body > p { margin: 8px 14px; }
 .warn-text { color: var(--out) !important; }
+
+/* ---------------------------------------------------------------- 8d: Android */
+.install-steps { margin: 10px 0; padding-left: 20px; color: var(--ink-2); }
+.install-steps li { margin: 6px 0; }
+.mono { font-family: ui-monospace, monospace; word-break: break-all; }
