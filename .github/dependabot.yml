@@ -1,0 +1,27 @@
+# Actualizaciones de dependencias (control «actualiza dependencias vulnerables»).
+# Abre PRs semanales agrupados; las alertas de seguridad llegan además en cuanto se publican.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule: { interval: weekly, day: monday }
+    groups: { app: { patterns: ["*"] } }
+    open-pull-requests-limit: 3
+  - package-ecosystem: npm
+    directory: /engine
+    schedule: { interval: weekly, day: monday }
+    groups: { engine: { patterns: ["*"] } }
+  - package-ecosystem: npm
+    directory: /rules-tests
+    schedule: { interval: monthly }
+    groups: { rules-tests: { patterns: ["*"] } }
+  - package-ecosystem: pip
+    directory: /tools/migrate
+    schedule: { interval: monthly }
+  - package-ecosystem: gradle
+    directory: /android
+    schedule: { interval: monthly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    groups: { actions: { patterns: ["*"] } }

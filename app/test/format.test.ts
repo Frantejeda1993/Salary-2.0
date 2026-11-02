@@ -4,11 +4,11 @@ import { budgetLevel, groupByBank } from "../src/lib/format";
 describe("cuentas por banco", () => {
   it("agrupa por banco respetando el orden y deja aparte las que no tienen banco", () => {
     const g = groupByBank([
-      ["a", { name: "Principal", bankName: "BBVA" }], ["b", { name: "Mio", bankName: "Trade Republic" }],
-      ["c", { name: "Ahorro", bankName: " BBVA " }], ["d", { name: "Efectivo", bankName: "" }],
+      ["a", { name: "Principal", bankName: "Banco Uno" }], ["b", { name: "Mio", bankName: "Banco Dos" }],
+      ["c", { name: "Ahorro", bankName: " Banco Uno " }], ["d", { name: "Efectivo", bankName: "" }],
     ]);
     expect(g.map((x) => [x.bank, x.accounts.map(([id]) => id)])).toEqual([
-      ["BBVA", ["a", "c"]], ["Trade Republic", ["b"]], ["Sin banco", ["d"]]]);
+      ["Banco Uno", ["a", "c"]], ["Banco Dos", ["b"]], ["Sin banco", ["d"]]]);
   });
 });
 

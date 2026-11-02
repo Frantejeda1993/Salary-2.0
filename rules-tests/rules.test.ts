@@ -216,3 +216,20 @@ describe("gastos compartidos (8c)", () => {
     await assertFails(getDoc(doc(as(ADMIN), "pairs/p1/incomes/ana_2026-11")));
   });
 });
+
+describe("tamaño de los textos que ven otros", () => {
+  const EVA = { uid: "eva", email: "eva@example.com" };
+  it("solicitudes de acceso: nombre y nota con límite", async () => {
+    const r = (o: Record<string, unknown>) => ({ email: "luis@example.com", status: "pending", requestedByUid: LUIS.uid,
+      requestedByEmail: LUIS.email, requestedByName: "Luis", createdAt: "2026-11-01T00:00:00Z", ...o });
+    await assertFails(setDoc(doc(as(LUIS), "accessRequests/luis@example.com"), r({ note: "x".repeat(301) })));
+    await assertFails(setDoc(doc(as(LUIS), "accessRequests/luis@example.com"), r({ requestedByName: "x".repeat(101) })));
+    await assertSucceeds(setDoc(doc(as(LUIS), "accessRequests/luis@example.com"), r({ note: "Hola" })));
+  });
+  it("parejas y gastos compartidos: nombre y categoría con límite", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), "allowlist/eva@example.com"), {}); });
+    const inv = { members: [ANA.uid], status: "pending", invitedBy: ANA.uid, invitedEmail: EVA.email, emails: { ana: ANA.email }, createdAt: "x" };
+    await assertFails(setDoc(doc(as(ANA), "pairs/p9"), { ...inv, names: { ana: "x".repeat(101) } }));
+    await assertSucceeds(setDoc(doc(as(ANA), "pairs/p8"), { ...inv, names: { ana: "Ana" } }));
+  });
+});

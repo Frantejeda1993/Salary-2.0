@@ -58,6 +58,7 @@ Idioma: **español** en código (comentarios, nombres de UI), commits, docs y re
 | `firestore.rules` | Cerradas: solo emails invitados, solo `users/{uid}/…`; `meta/` solo la escribe el script. |
 | `docs/DECISIONES.md` | Registro de decisiones de negocio (léelo antes de tocar cálculos). |
 | `docs/ESTADO.md` | Fases, estado actual y pendientes. |
+| `docs/SEGURIDAD.md` | Revisión de seguridad (27 controles), lo pendiente en consolas y cómo comprobar la CSP (`app/csp.ts`). |
 | `android/` | App Android (8d): TWA de la PWA + lector de notificaciones de pago. Ver `docs/ANDROID.md`. Solo compila en GitHub Actions (aquí no se descarga el SDK); el lector es Java puro y sus tests se pueden ejecutar con `javac`. |
 
 ## Modelo de datos (Firestore)
@@ -130,6 +131,10 @@ que toque `app/**` o `engine/src/**`: **un push a main es un despliegue a produc
 - UI: móvil primero (iPhone PWA: notch, teclado iOS, objetivos de 44 px, contraste AA,
   tema claro/oscuro del sistema). Textos de interfaz en español, tuteo, sin jerga contable.
 - Commits pequeños, en español, describiendo el «qué» y el porqué de negocio.
+- Seguridad: la CI escanea secretos en todo el historial (gitleaks, `.gitleaks.toml`) y falla con
+  vulnerabilidades altas en dependencias de producción. Un servicio externo nuevo necesita su
+  dominio en la CSP (`app/csp.ts`). Nunca datos reales en tests, ni siquiera nombres de banco o
+  últimos dígitos de tarjeta.
 
 ## Multiusuario
 

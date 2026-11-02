@@ -40,6 +40,8 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - name: Dependencias de producción sin vulnerabilidades altas
+        run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build
 
@@ -109,3 +111,16 @@ jobs:
       - run: python -m pytest -q
         env:
           SALARY_LEGACY_PATH: ${{ github.workspace }}/salary-legacy
+
+  secrets:
+    name: Secretos (todo el historial)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git . --redact --no-banner -c .gitleaks.toml
+

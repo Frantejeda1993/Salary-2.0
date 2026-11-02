@@ -2,6 +2,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { cspPlugin } from "./csp";
 import { fileURLToPath } from "node:url";
 
 // Se publica en https://frantejeda1993.github.io/Salary-2.0/
@@ -15,6 +16,7 @@ export default defineConfig({
   server: { fs: { allow: [".."] } },
   plugins: [
     react(),
+    cspPlugin(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["apple-touch-icon.png"],

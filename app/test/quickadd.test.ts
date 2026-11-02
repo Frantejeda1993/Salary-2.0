@@ -87,18 +87,18 @@ describe("atajos", () => {
 
 describe("atajo genérico: nombres de Wallet", async () => {
   const { matchWallet, walletNameMoves } = await import("../src/lib/quickadd");
-  const cards = { k1: { name: "Tarjeta Cuenta *1425", walletNames: ["BBVA Crédito"] }, k2: { name: "Vieja", archived: true, walletNames: ["Antigua"] } };
-  const accounts = { a1: { name: "Cuenta *1425", walletNames: ["BBVA Débito"] }, a2: { name: "N26" } };
+  const cards = { k1: { name: "Tarjeta Cuenta *0000", walletNames: ["Banco Uno Crédito"] }, k2: { name: "Vieja", archived: true, walletNames: ["Antigua"] } };
+  const accounts = { a1: { name: "Cuenta *0000", walletNames: ["Banco Uno Débito"] }, a2: { name: "Ahorro" } };
   it("reconoce el nombre aprendido, sin mayúsculas ni tildes, y salta lo archivado", () => {
-    expect(matchWallet(cards, accounts, "bbva credito")).toBe("card:k1");
-    expect(matchWallet(cards, accounts, "BBVA Débito")).toBe("acc:a1");
+    expect(matchWallet(cards, accounts, "banco uno credito")).toBe("card:k1");
+    expect(matchWallet(cards, accounts, "Banco Uno Débito")).toBe("acc:a1");
     expect(matchWallet(cards, accounts, "Antigua")).toBeNull();
     expect(matchWallet(cards, accounts, "Revolut")).toBeNull();
   });
   it("recordar mueve el nombre a la nueva tarjeta o cuenta y lo quita de la anterior", () => {
     expect(walletNameMoves(cards, accounts, "Revolut", "acc:a2")).toEqual([["accounts", "a2", ["Revolut"]]]);
-    expect(walletNameMoves(cards, accounts, "BBVA Débito", "card:k1")).toEqual([
-      ["cards", "k1", ["BBVA Crédito", "BBVA Débito"]], ["accounts", "a1", []]]);
-    expect(walletNameMoves(cards, accounts, "BBVA Débito", "acc:a1")).toEqual([]);
+    expect(walletNameMoves(cards, accounts, "Banco Uno Débito", "card:k1")).toEqual([
+      ["cards", "k1", ["Banco Uno Crédito", "Banco Uno Débito"]], ["accounts", "a1", []]]);
+    expect(walletNameMoves(cards, accounts, "Banco Uno Débito", "acc:a1")).toEqual([]);
   });
 });

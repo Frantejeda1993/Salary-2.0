@@ -15,5 +15,5 @@
     "baseUrl": ".",
     "paths": { "@salary/engine": ["../engine/src/index.ts"] }
   },
-  "include": ["src", "test", "dev", "vite.config.ts"]
+  "include": ["src", "test", "dev", "vite.config.ts", "csp.ts"]
 }

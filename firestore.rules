@@ -29,6 +29,11 @@ service cloud.firestore {
         && (isAdmin() || exists(/databases/$(database)/documents/allowlist/$(myEmail())));
     }
 
+    // Texto opcional con tamaño máximo (lo que un usuario escribe y otro ve).
+    function shortText(d, k, max) {
+      return !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max);
+    }
+
     function isOwner(uid) {
       return invited() && request.auth.uid == uid;
     }
@@ -66,6 +71,9 @@ service cloud.firestore {
           && d.status == 'pending'
           && d.requestedByUid == request.auth.uid
           && d.keys().hasOnly(['email', 'status', 'requestedByUid', 'requestedByEmail', 'requestedByName', 'createdAt', 'note'])
+          && email.size() <= 254
+          && shortText(d, 'requestedByName', 100) && shortText(d, 'requestedByEmail', 254)
+          && shortText(d, 'note', 300) && shortText(d, 'createdAt', 40)
           && (email == myEmail() || invited());
       }
       allow create: if signedIn() && validNew();
@@ -93,7 +101,9 @@ service cloud.firestore {
         && data().invitedEmail != myEmail()
         && data().keys().hasOnly(['members', 'status', 'invitedBy', 'invitedEmail', 'names', 'emails', 'createdAt'])
         && data().names.keys().hasOnly([request.auth.uid])
-        && data().emails.keys().hasOnly([request.auth.uid]);
+        && data().emails.keys().hasOnly([request.auth.uid])
+        && data().invitedEmail.size() <= 254
+        && shortText(data().names, request.auth.uid, 100);
 
       allow read: if invited() && (isMember() || isInvitee());
 
@@ -105,7 +115,8 @@ service cloud.firestore {
           && changed().hasOnly(['status', 'members', 'names', 'emails', 'acceptedAt'])
           && data().names.diff(resource.data.names).affectedKeys().hasOnly([request.auth.uid])
           && data().emails.diff(resource.data.emails).affectedKeys().hasOnly([request.auth.uid])
-          && data().emails[request.auth.uid] == myEmail())
+          && data().emails[request.auth.uid] == myEmail()
+          && shortText(data().names, request.auth.uid, 100))
         // …o rechaza.
         || (isInvitee() && data().status == 'declined' && changed().hasOnly(['status', 'endedAt']))
         // Quien invitó la cancela mientras está pendiente.
@@ -134,6 +145,7 @@ service cloud.firestore {
             && d.description is string && d.description.size() <= 200
             && d.amount is number && d.amount > 0 && d.amount < 1000000
             && d.paidBy in pairData().members
+            && shortText(d, 'categoryName', 100)
             && d.split.mode in ['equal', 'percent', 'income']
             && d.split.keys().hasOnly(['mode', 'percent']);
         }

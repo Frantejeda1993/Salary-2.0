@@ -1,0 +1,9 @@
+# Escaneo de secretos (CI: job «Secretos»). Reglas por defecto de gitleaks, más esta excepción:
+# la configuración web de Firebase es pública por diseño (va dentro de la app; la seguridad la dan
+# las reglas de Firestore y las restricciones de la clave en Google Cloud).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Clave web de Firebase (pública por diseño)"
+regexes = ['''AIzaSyBmTORbMK58tQTAIzbIhpMLn5W8PzDLH1A''']
