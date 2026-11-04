@@ -7,7 +7,9 @@ import { useState } from "react";
 import { addMonths, type Month } from "@salary/engine";
 import { useAuth } from "../auth";
 import { useData } from "../data";
-import { createItem, deleteItem, patchItem } from "../lib/actions";
+import { createItem, deleteItem, moveChargeMonths, patchItem } from "../lib/actions";
+import { rechargePlan, summarizeMoves } from "../lib/cards";
+import { formatCents } from "../lib/money";
 import { monthLong, nameOf, sortedLive } from "../lib/format";
 import { formatEuros, parseAmount, parsePercent } from "../lib/money";
 import { SPAIN_DEDUCTIONS } from "../lib/onboarding";
@@ -342,7 +344,7 @@ export function SalaryEditor({ id, onClose }: { id: string | null; onClose: () =
 // =============================================================================== tarjetas
 
 export function CardEditor({ id, onClose, accountId }: { id: string | null; onClose: () => void; accountId?: string }) {
-  const { uid, docs, mainAccountId, toast } = useCtx();
+  const { uid, docs, mainAccountId, toast, currentMonth } = useCtx();
   const c = id ? (docs.cards[id] as Raw) : null;
   const [name, setName] = useState((c?.name as string) ?? "");
   const [acc, setAcc] = useState((c?.accountId as string) ?? accountId ?? mainAccountId ?? "");
@@ -357,6 +359,10 @@ export function CardEditor({ id, onClose, accountId }: { id: string | null; onCl
   const accChanged = !!c && acc !== c.accountId;
   const data = { name: name.trim(), accountId: acc, cutoffDay: natural ? null : day, chargeOffsetMonths: Number(offset), defaultReserveIn: reserve };
   const close = (text: string, undo: () => void) => { toast(text, undo); onClose(); };
+  // Compras pendientes de cobro cuyo mes ya no cuadra con el corte del formulario.
+  const plan = c && !errors.length ? rechargePlan(id!, data, docs.movements, docs.cardSettlements, currentMonth) : { moves: [], skippedSettled: 0 };
+  const [moveThem, setMoveThem] = useState(true);
+  const moving = moveThem && plan.moves.length > 0;
   return (
     <Sheet title={c ? (c.name as string) : "Nueva tarjeta de crédito"} onClose={onClose}>
       <Field label="Nombre"><TextInput value={name} onChange={setName} placeholder="Visa" /></Field>
@@ -377,14 +383,30 @@ export function CardEditor({ id, onClose, accountId }: { id: string | null; onCl
           <button type="button" aria-pressed={reserve === "purchase"} onClick={() => setReserve("purchase")}>Al comprar</button>
           <button type="button" aria-pressed={reserve === "charge"} onClick={() => setReserve("charge")}>Al cobrarse</button>
         </div></div>
-      {c && <p className="muted small">Los cambios de corte y cobro valen para las compras nuevas; las ya registradas mantienen su mes de cobro.</p>}
+      {c && plan.moves.length > 0 && (
+        <section className="recharge" aria-label="Compras con otro mes de cobro">
+          <p><b>{plan.moves.length === 1 ? "1 compra pendiente" : `${plan.moves.length} compras pendientes`}</b> no {plan.moves.length === 1 ? "cuadra" : "cuadran"} con este corte:</p>
+          <ul className="mini-list">{summarizeMoves(plan.moves).map((g) => (
+            <li key={`${g.from}${g.to}`}>De {monthLong(g.from)} a {monthLong(g.to)}: {g.count === 1 ? "1 compra" : `${g.count} compras`}, {formatCents(g.cents)}</li>))}</ul>
+          <details className="secondary"><summary>Ver cuáles</summary>
+            <ul className="mini-list">{plan.moves.map((m) => <li key={m.id}>{m.date.slice(8, 10)}/{m.date.slice(5, 7)} · {m.description || "Sin concepto"} · {formatCents(Math.round(m.amount * 100))}</li>)}</ul>
+          </details>
+          <label className="check"><input type="checkbox" checked={moveThem} onChange={(e) => setMoveThem(e.target.checked)} />Moverlas a su mes de cobro correcto</label>
+        </section>
+      )}
+      {c && <p className="muted small">El corte decide en qué mes se cobra cada compra. Las de cargos ya saldados no se mueven{plan.skippedSettled ? ` (${plan.skippedSettled === 1 ? "1 compra" : `${plan.skippedSettled} compras`} en esa situación)` : ""}.</p>}
       {tried && <Errors list={errors} />}
       <button className="btn primary wide save" onClick={() => {
         setTried(true);
         if (errors.length) return;
-        if (c) close("Tarjeta guardada", patchItem(uid, "cards", id!, data, c));
+        if (c) {
+          const undoCard = patchItem(uid, "cards", id!, data, c);
+          const undoMoves = moving ? moveChargeMonths(uid, plan.moves) : null;
+          close(moving ? `Tarjeta guardada: ${plan.moves.length === 1 ? "1 compra cambia" : `${plan.moves.length} compras cambian`} de mes de cobro` : "Tarjeta guardada",
+            () => { undoMoves?.(); undoCard(); });
+        }
         else close("Tarjeta añadida", createItem(uid, "cards", { ...data, archived: false }).undo);
-      }}>{c ? "Guardar" : "Añadir tarjeta"}</button>
+      }}>{c ? (moving ? `Guardar y mover ${plan.moves.length === 1 ? "1 compra" : `${plan.moves.length} compras`}` : "Guardar") : "Añadir tarjeta"}</button>
       {c && <button className="btn wide ghost danger-btn" onClick={() => close(c.archived ? "Tarjeta recuperada" : "Tarjeta archivada", patchItem(uid, "cards", id!, { archived: !c.archived }, c))}>
         {c.archived ? "Recuperar tarjeta" : "Archivar (ya no aparece para pagar)"}</button>}
     </Sheet>

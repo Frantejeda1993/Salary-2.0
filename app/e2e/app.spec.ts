@@ -298,3 +298,26 @@ test("Gastos compartidos: no se deja de compartir con saldo pendiente", async ({
   await expect(fold).toContainText("primero tenéis que quedar en paz (debes 40,00 €)");
   await expect(fold.getByRole("button", { name: "Dejar de compartir" })).toHaveCount(0);
 });
+
+test("Tarjeta: al cambiar el corte, las compras pendientes pasan a su mes de cobro", async ({ page }) => {
+  const MAIN = "LRkBOzZU3G8xI7CGr5c3";
+  const now = new Date();
+  const ym = (d: Date) => d.toISOString().slice(0, 7);
+  const prev = ym(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15)));
+  await openApp(page, { extra: {
+    "users/mock-uid/cards/visae2e": { name: "Visa e2e", accountId: MAIN, cutoffDay: 25, chargeOffsetMonths: 1, defaultReserveIn: "purchase" },
+    "users/mock-uid/movements/tarde": { type: "expense", date: `${prev}-28`, amount: 30, description: "Compra tras el corte", accountId: MAIN,
+      card: { cardId: "visae2e", chargeMonth: ym(now), reserveIn: "purchase" } },
+  } });
+  await tab(page, "Ajustes");
+  await page.locator(".fold > summary", { hasText: "Cuentas" }).click();
+  await page.locator(".fold[open] .rows .what.plain", { hasText: "Cuenta0" }).first().click();
+  await sheet(page).locator(".changes .rows .what.plain", { hasText: "Visa e2e" }).click();
+  await expect(sheet(page).locator(".recharge")).toContainText("1 compra pendiente");
+  await sheet(page).getByRole("button", { name: "Guardar y mover 1 compra" }).click();
+  await expect(page.locator(".toast")).toContainText("1 compra cambia de mes de cobro");
+  // Vuelve a la ficha de la cuenta. Ya cuadra: al reabrir la tarjeta no queda nada que mover.
+  await sheet(page).locator(".changes .rows .what.plain", { hasText: "Visa e2e" }).click();
+  await expect(sheet(page).getByRole("button", { name: "Guardar", exact: true })).toBeVisible();
+  await expect(sheet(page).locator(".recharge")).toHaveCount(0);
+});

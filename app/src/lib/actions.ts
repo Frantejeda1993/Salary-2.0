@@ -179,3 +179,14 @@ export function repayLoan(uid: string, loanId: string, loan: Record<string, unkn
     run(u.commit());
   };
 }
+
+/** Cambia el mes de cobro de varias compras con tarjeta (al cambiar el corte), con deshacer. */
+export function moveChargeMonths(uid: string, moves: { id: string; from: string; to: string }[]): Undo {
+  const apply = (pick: (m: { from: string; to: string }) => string) => {
+    const b = writeBatch(db);
+    for (const m of moves) b.update(userItem(uid, "movements", m.id), { "card.chargeMonth": pick(m), updatedAt: now() });
+    run(b.commit());
+  };
+  apply((m) => m.to);
+  return () => apply((m) => m.from);
+}

@@ -96,3 +96,10 @@ Fase 4b), con su test y con `npm run delta` para ver qué cifras reales cambia.
 | Nómina y gasto fijo **se pueden borrar siempre**, también con pagos marcados, tras una confirmación que dice qué meses cerrados cambian y qué pagos se pierden. Se puede deshacer desde el aviso. |
 | Toda corrección o borrado que toca meses cerrados lo avisa antes de guardar. |
 
+## Tarjetas: cambiar el corte (4-nov-2026, a petición de Francisco)
+
+| Regla |
+| --- |
+| Cada compra con tarjeta guarda su mes de cobro al apuntarla. Si cambian el día de corte o el cobro, la ficha de la tarjeta enseña las compras **pendientes** cuyo mes ya no cuadra y, al guardar, las mueve a su mes correcto (con deshacer). Antes, las ya registradas mantenían siempre su mes. |
+| No se mueven compras de un cargo ya saldado, ni hacia un cargo saldado (el pago dejaría de cuadrar), ni de cargos de meses ya pasados (eso son atrasos, no un cambio de corte). |
+
